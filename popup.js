@@ -33,13 +33,124 @@ const actionsContent = document.getElementById("actionsContent");
 const statsContent = document.getElementById("statsContent");
 
 // ======= Message Bar Function =======
-function showMessage(msg, type = "info") {
+function showMessage(msg, type = "info", duration = 3000) {
   messageBar.textContent = msg;
   messageBar.className = "ag-message " + type;
   messageBar.style.display = "block";
   setTimeout(() => {
     messageBar.style.display = "none";
-  }, 2000);
+  }, duration);
+}
+
+// ======= Error Handling & Validation Utilities =======
+function isValidUrl(string) {
+  try {
+    const url = new URL(string);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (_) {
+    return false;
+  }
+}
+
+function isValidTab(tab) {
+  return (
+    tab &&
+    typeof tab.title === "string" &&
+    typeof tab.url === "string" &&
+    isValidUrl(tab.url) &&
+    tab.title.length > 0 &&
+    tab.title.length <= 500 &&
+    tab.url.length <= 2048
+  );
+}
+
+function sanitizeTabData(tab) {
+  if (!tab) return null;
+
+  let favicon = tab.favicon;
+  if (!favicon && tab.url) {
+    try {
+      const urlObj = new URL(tab.url);
+      favicon = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
+    } catch (error) {
+      favicon =
+        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+    }
+  }
+
+  const sanitized = {
+    title: String(tab.title || "Untitled").slice(0, 500),
+    url: String(tab.url || "").slice(0, 2048),
+    favicon:
+      favicon ||
+      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>',
+    savedAt: Date.now(),
+  };
+
+  return isValidTab(sanitized) ? sanitized : null;
+}
+
+async function safeStorageOperation(operation, errorContext) {
+  try {
+    const result = await operation();
+    return { success: true, data: result };
+  } catch (error) {
+    console.error(`Storage error in ${errorContext}:`, error);
+
+    if (error.message && error.message.includes("QUOTA_BYTES_PER_ITEM")) {
+      showMessage(
+        "Storage limit reached! Please delete some tabs.",
+        "warning",
+        5000
+      );
+    } else if (error.message && error.message.includes("QUOTA_BYTES")) {
+      showMessage(
+        "Extension storage is full! Please clear some data.",
+        "warning",
+        5000
+      );
+    } else {
+      showMessage(`Error ${errorContext}. Please try again.`, "warning");
+    }
+
+    return { success: false, error: error.message };
+  }
+}
+
+async function validateStorageData() {
+  try {
+    const { savedTabs = [] } = await chrome.storage.local.get(["savedTabs"]);
+
+    if (!Array.isArray(savedTabs)) {
+      console.warn("savedTabs is not an array, resetting...");
+      await chrome.storage.local.set({ savedTabs: [] });
+      return [];
+    }
+
+    const validTabs = savedTabs.filter((tab) => {
+      const isValid = isValidTab(tab);
+      if (!isValid) {
+        console.warn("Invalid tab found and removed:", tab);
+      }
+      return isValid;
+    });
+
+    if (validTabs.length !== savedTabs.length) {
+      console.log(
+        `Cleaned ${savedTabs.length - validTabs.length} invalid tabs`
+      );
+      await chrome.storage.local.set({ savedTabs: validTabs });
+    }
+
+    return validTabs;
+  } catch (error) {
+    console.error("Error validating storage data:", error);
+    showMessage(
+      "Error loading saved tabs. Storage may be corrupted.",
+      "warning"
+    );
+    return [];
+  }
 }
 
 // ======= Tab Switching =======
@@ -49,154 +160,498 @@ actionsTab.onclick = () => {
   actionsContent.style.display = "";
   statsContent.style.display = "none";
 };
-statsTab.onclick = () => {
+statsTab.onclick = async () => {
   statsTab.classList.add("ag-tab-btn-active");
   actionsTab.classList.remove("ag-tab-btn-active");
   actionsContent.style.display = "none";
   statsContent.style.display = "";
-  // Update stats
-  chrome.storage.local.get(['savedTabs'], ({ savedTabs = [] }) => {
-    document.getElementById("statsTotal").textContent = savedTabs.length;
-    if (savedTabs.length) {
-      document.getElementById("statsLast").textContent = new Date(savedTabs[savedTabs.length - 1].savedAt).toLocaleString();
+
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading statistics"
+    );
+
+    if (!result.success) {
+      document.getElementById("statsTotal").textContent = "Error";
+      document.getElementById("statsLast").textContent = "Error";
+      return;
+    }
+
+    const { savedTabs = [] } = result.data;
+    const validTabs = savedTabs.filter(isValidTab);
+
+    document.getElementById("statsTotal").textContent = validTabs.length;
+
+    if (validTabs.length > 0) {
+      const lastTab = validTabs[validTabs.length - 1];
+      const lastSaved = lastTab.savedAt
+        ? new Date(lastTab.savedAt).toLocaleString()
+        : "Unknown";
+      document.getElementById("statsLast").textContent = lastSaved;
     } else {
       document.getElementById("statsLast").textContent = "N/A";
     }
-  });
+  } catch (error) {
+    console.error("Error loading statistics:", error);
+    document.getElementById("statsTotal").textContent = "Error";
+    document.getElementById("statsLast").textContent = "Error";
+    showMessage("Failed to load statistics", "warning");
+  }
 };
 
 // ======= Render Tabs =======
 function renderTabs(tabs) {
-  tabList.innerHTML = '';
-  const grouped = {};
-  tabs.forEach(tab => {
-    const date = new Date(tab.savedAt).toLocaleDateString();
-    if (!grouped[date]) grouped[date] = [];
-    grouped[date].push(tab);
-  });
+  try {
+    tabList.innerHTML = "";
 
-  for (const date in grouped) {
-    const group = document.createElement("div");
-    group.className = "tab-group";
-    const header = document.createElement("h4");
-    header.textContent = date;
-    group.appendChild(header);
+    if (!Array.isArray(tabs)) {
+      console.error("renderTabs received non-array:", tabs);
+      tabs = [];
+    }
 
-    grouped[date].forEach(tab => {
-      const div = document.createElement("div");
-      div.className = "tab";
-      div.innerHTML = `
-        <img class="favicon" src="${tab.favicon || 'default-favicon.png'}" />
-        <span title="${tab.url}">${tab.title}</span>
-        <button data-url="${tab.url}" class="open" title="Open"><span class="material-icons">open</span>
-      </button> 
-        <button data-url="${tab.url}" class="delete" title="Delete"><span class="material-icons">&#xe872;</span>
-      </button>
-      `;
-      group.appendChild(div);
+    const validTabs = tabs.filter(isValidTab);
+    if (validTabs.length !== tabs.length) {
+      console.warn(
+        `${
+          tabs.length - validTabs.length
+        } invalid tabs filtered out during render`
+      );
+    }
+
+    const grouped = {};
+    validTabs.forEach((tab) => {
+      try {
+        const date = new Date(tab.savedAt).toLocaleDateString();
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(tab);
+      } catch (error) {
+        console.warn("Error processing tab for grouping:", tab, error);
+      }
     });
 
-    tabList.appendChild(group);
-  } 
+    for (const date in grouped) {
+      try {
+        const group = document.createElement("div");
+        group.className = "tab-group";
+        const header = document.createElement("h4");
+        header.textContent = date;
+        group.appendChild(header);
 
-  tabCount.textContent = tabs.length;
-  if (totalTabs) totalTabs.textContent = `Total saved: ${tabs.length}`;
+        grouped[date].forEach((tab) => {
+          try {
+            const div = document.createElement("div");
+            div.className = "tab";
+
+            // Create elements safely to avoid XSS
+            const img = document.createElement("img");
+            img.className = "favicon";
+            img.src =
+              tab.favicon ||
+              'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+            img.onerror = () => {
+              img.src =
+                'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+            };
+
+            const titleSpan = document.createElement("span");
+            titleSpan.title = tab.url;
+            titleSpan.textContent = tab.title || "Untitled";
+
+            const openBtn = document.createElement("button");
+            openBtn.dataset.url = tab.url;
+            openBtn.className = "open";
+            openBtn.title = "Open";
+            openBtn.innerHTML =
+              '<span class="material-icons">open_in_new</span>';
+
+            const deleteBtn = document.createElement("button");
+            deleteBtn.dataset.url = tab.url;
+            deleteBtn.className = "delete";
+            deleteBtn.title = "Delete";
+            deleteBtn.innerHTML = '<span class="material-icons">delete</span>';
+
+            div.appendChild(img);
+            div.appendChild(titleSpan);
+            div.appendChild(openBtn);
+            div.appendChild(deleteBtn);
+
+            group.appendChild(div);
+          } catch (error) {
+            console.error("Error rendering individual tab:", tab, error);
+          }
+        });
+
+        tabList.appendChild(group);
+      } catch (error) {
+        console.error("Error rendering tab group:", date, error);
+      }
+    }
+
+    tabCount.textContent = validTabs.length;
+    if (totalTabs) totalTabs.textContent = `Total saved: ${validTabs.length}`;
+  } catch (error) {
+    console.error("Error in renderTabs:", error);
+    tabList.innerHTML =
+      '<div style="padding: 20px; text-align: center; color: #999;">Error loading tabs</div>';
+    tabCount.textContent = "0";
+    if (totalTabs) totalTabs.textContent = "Total saved: 0";
+  }
 }
 
 // ======= Load Tabs =======
 async function loadTabs() {
-  const { savedTabs = [], theme = 'dark', font = '14px' } = await chrome.storage.local.get();
-  document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.style.setProperty('--font-size', font);
-  renderTabs(savedTabs);
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs", "theme", "font"]),
+      "loading tabs"
+    );
+
+    if (!result.success) {
+      renderTabs([]);
+      return;
+    }
+
+    const { savedTabs, theme = "dark", font = "14px" } = result.data;
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.setProperty("--font-size", font);
+
+    // Validate and clean data
+    const validatedTabs = await validateStorageData();
+    renderTabs(validatedTabs);
+  } catch (error) {
+    console.error("Error in loadTabs:", error);
+    showMessage("Failed to load saved tabs", "warning");
+    renderTabs([]);
+  }
 }
 
 // ======= Tab List Actions =======
 tabList.addEventListener("click", async (e) => {
-  if (e.target.closest(".open")) {
-    chrome.tabs.create({ url: e.target.closest(".open").dataset.url });
-  } else if (e.target.closest(".delete")) {
-    const url = e.target.closest(".delete").dataset.url;
-    const { savedTabs } = await chrome.storage.local.get();
-    const filtered = savedTabs.filter(t => t.url !== url);
-    await chrome.storage.local.set({ savedTabs: filtered });
-    loadTabs();
-    showMessage("Tab deleted!", "success");
+  try {
+    if (e.target.closest(".open")) {
+      const url = e.target.closest(".open").dataset.url;
+      if (!isValidUrl(url)) {
+        showMessage("Invalid URL cannot be opened", "warning");
+        return;
+      }
+      await chrome.tabs.create({ url });
+      showMessage("Tab opened!", "success");
+    } else if (e.target.closest(".delete")) {
+      const url = e.target.closest(".delete").dataset.url;
+
+      const result = await safeStorageOperation(
+        () => chrome.storage.local.get(["savedTabs"]),
+        "loading tabs for deletion"
+      );
+
+      if (!result.success) return;
+
+      const { savedTabs = [] } = result.data;
+      const filtered = savedTabs.filter((t) => t.url !== url);
+
+      const saveResult = await safeStorageOperation(
+        () => chrome.storage.local.set({ savedTabs: filtered }),
+        "deleting tab"
+      );
+
+      if (saveResult.success) {
+        loadTabs();
+        showMessage("Tab deleted!", "success");
+      }
+    }
+  } catch (error) {
+    console.error("Error in tab list action:", error);
+    showMessage("Operation failed. Please try again.", "warning");
   }
 });
 
 // ======= Save Current Tab =======
 saveCurrentBtn.onclick = async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-
-  const { savedTabs = [] } = await chrome.storage.local.get();
-
-  if (!savedTabs.find(t => t.url === tab.url)) {
-    savedTabs.push({
-      title: tab.title,
-      url: tab.url,
-      favicon: `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}`,
-      savedAt: Date.now()
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
     });
-    await chrome.storage.local.set({ savedTabs });
-    loadTabs();
-    showMessage("Tab saved!", "success");
-  } else {
-    showMessage("This tab is already saved!", "warning");
+    if (!tab) {
+      showMessage("No active tab found", "warning");
+      return;
+    }
+
+    const sanitizedTab = sanitizeTabData(tab);
+    if (!sanitizedTab) {
+      showMessage("Cannot save this tab (invalid URL or data)", "warning");
+      return;
+    }
+
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs to check duplicates"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+
+    if (savedTabs.find((t) => t.url === sanitizedTab.url)) {
+      showMessage("This tab is already saved!", "warning");
+      return;
+    }
+
+    // Check storage limits
+    if (savedTabs.length >= 1000) {
+      showMessage(
+        "Maximum number of saved tabs reached (1000). Please delete some tabs.",
+        "warning",
+        5000
+      );
+      return;
+    }
+
+    savedTabs.push(sanitizedTab);
+
+    const saveResult = await safeStorageOperation(
+      () => chrome.storage.local.set({ savedTabs }),
+      "saving current tab"
+    );
+
+    if (saveResult.success) {
+      loadTabs();
+      showMessage("Tab saved!", "success");
+    }
+  } catch (error) {
+    console.error("Error saving current tab:", error);
+    showMessage("Failed to save tab. Please try again.", "warning");
   }
 };
 
 // ======= Save All Tabs =======
 saveAllBtn.onclick = async () => {
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const { savedTabs = [] } = await chrome.storage.local.get();
-
-  let added = 0, skipped = 0;
-  for (const tab of tabs) {
-    if (!savedTabs.find(t => t.url === tab.url)) {
-      savedTabs.push({
-        title: tab.title,
-        url: tab.url,
-        favicon: `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}`,
-        savedAt: Date.now()
-      });
-      added++;
-    } else {
-      skipped++;
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    if (!tabs || tabs.length === 0) {
+      showMessage("No tabs found to save", "warning");
+      return;
     }
-  }
 
-  await chrome.storage.local.set({ savedTabs });
-  loadTabs();
-  if (added && skipped) showMessage(`${added} tab(s) saved, ${skipped} duplicate(s) skipped.`, "info");
-  else if (added) showMessage("All tabs saved!", "success");
-  else showMessage("All tabs are already saved!", "warning");
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading existing saved tabs"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+
+    let added = 0,
+      skipped = 0,
+      invalid = 0;
+    const newTabs = [...savedTabs];
+
+    for (const tab of tabs) {
+      const sanitizedTab = sanitizeTabData(tab);
+
+      if (!sanitizedTab) {
+        invalid++;
+        continue;
+      }
+
+      if (newTabs.find((t) => t.url === sanitizedTab.url)) {
+        skipped++;
+      } else {
+        // Check total limit
+        if (newTabs.length >= 1000) {
+          showMessage(
+            `Stopped at 1000 tabs limit. ${added} saved, ${
+              tabs.length - added - skipped - invalid
+            } remaining.`,
+            "warning",
+            5000
+          );
+          break;
+        }
+        newTabs.push(sanitizedTab);
+        added++;
+      }
+    }
+
+    if (added > 0) {
+      const saveResult = await safeStorageOperation(
+        () => chrome.storage.local.set({ savedTabs: newTabs }),
+        "saving all tabs"
+      );
+
+      if (saveResult.success) {
+        loadTabs();
+      }
+    }
+
+    // User feedback
+    if (added && skipped && invalid) {
+      showMessage(
+        `${added} saved, ${skipped} duplicates skipped, ${invalid} invalid tabs ignored.`,
+        "info",
+        4000
+      );
+    } else if (added && skipped) {
+      showMessage(
+        `${added} tab(s) saved, ${skipped} duplicate(s) skipped.`,
+        "info"
+      );
+    } else if (added) {
+      showMessage(`All ${added} tabs saved!`, "success");
+    } else if (skipped && !invalid) {
+      showMessage("All tabs are already saved!", "warning");
+    } else if (invalid) {
+      showMessage(`${invalid} invalid tabs could not be saved.`, "warning");
+    }
+  } catch (error) {
+    console.error("Error saving all tabs:", error);
+    showMessage("Failed to save tabs. Please try again.", "warning");
+  }
 };
 
 // ======= Open All Tabs =======
 openAllBtn.onclick = async () => {
-  const { savedTabs = [] } = await chrome.storage.local.get();
-  savedTabs.forEach(tab => chrome.tabs.create({ url: tab.url }));
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs to open"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+
+    if (savedTabs.length === 0) {
+      showMessage("No saved tabs to open", "warning");
+      return;
+    }
+
+    if (savedTabs.length > 20) {
+      const confirmed = confirm(
+        `This will open ${savedTabs.length} tabs. Continue?`
+      );
+      if (!confirmed) return;
+    }
+
+    let opened = 0,
+      failed = 0;
+
+    for (const tab of savedTabs) {
+      try {
+        if (isValidUrl(tab.url)) {
+          await chrome.tabs.create({ url: tab.url });
+          opened++;
+        } else {
+          console.warn("Invalid URL skipped:", tab.url);
+          failed++;
+        }
+      } catch (error) {
+        console.error("Error opening tab:", tab.url, error);
+        failed++;
+      }
+    }
+
+    if (failed > 0) {
+      showMessage(
+        `${opened} tabs opened, ${failed} failed to open.`,
+        "warning",
+        4000
+      );
+    } else {
+      showMessage(`All ${opened} tabs opened successfully!`, "success");
+    }
+  } catch (error) {
+    console.error("Error opening all tabs:", error);
+    showMessage("Failed to open tabs. Please try again.", "warning");
+  }
 };
 
 // ======= Clear All Tabs =======
 clearBtn.onclick = async () => {
-  if (confirm("Clear all saved tabs?")) {
-    await chrome.storage.local.remove("savedTabs");
-    loadTabs();
-    showMessage("All saved tabs deleted!", "success");
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs count"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+    const count = savedTabs.length;
+
+    if (count === 0) {
+      showMessage("No saved tabs to clear", "info");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Delete all ${count} saved tabs? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const deleteResult = await safeStorageOperation(
+      () => chrome.storage.local.remove("savedTabs"),
+      "clearing all tabs"
+    );
+
+    if (deleteResult.success) {
+      loadTabs();
+      showMessage(`All ${count} saved tabs deleted!`, "success");
+    }
+  } catch (error) {
+    console.error("Error clearing all tabs:", error);
+    showMessage("Failed to clear tabs. Please try again.", "warning");
   }
 };
 
 // ======= Export Tabs =======
 exportBtn.onclick = async (e) => {
   e.preventDefault();
-  const { savedTabs = [] } = await chrome.storage.local.get();
-  const blob = new Blob([savedTabs.map(t => `${t.title}\n${t.url}`).join('\n\n')], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  chrome.downloads.download({ url, filename: "tabs.txt" });
-  showMessage("Tabs exported!", "success");
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs for export"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+
+    if (savedTabs.length === 0) {
+      showMessage("No saved tabs to export", "warning");
+      return;
+    }
+
+    const validTabs = savedTabs.filter(isValidTab);
+    if (validTabs.length !== savedTabs.length) {
+      console.warn(
+        `${
+          savedTabs.length - validTabs.length
+        } invalid tabs excluded from export`
+      );
+    }
+
+    const exportText = validTabs
+      .map((t) => `${t.title}\n${t.url}`)
+      .join("\n\n");
+    const blob = new Blob([exportText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `tab-saver-export-${timestamp}.txt`;
+
+    await chrome.downloads.download({ url, filename });
+
+    // Clean up blob URL
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    showMessage(`${validTabs.length} tabs exported successfully!`, "success");
+  } catch (error) {
+    console.error("Error exporting tabs:", error);
+    showMessage("Failed to export tabs. Please try again.", "warning");
+  }
 };
 
 // ======= Import Tabs =======
@@ -205,41 +660,157 @@ importBtn.onclick = () => {
   input.type = "file";
   input.accept = ".txt";
   input.onchange = async () => {
-    const file = input.files[0];
-    const text = await file.text();
-    const lines = text.split('\n').filter(Boolean);
-    const tabs = [];
-    for (let i = 0; i < lines.length; i += 2) {
-      const title = lines[i];
-      const url = lines[i + 1];
-      try {
-        if (!url || !url.startsWith("http")) continue;
-        tabs.push({
-          title,
-          url,
-          favicon: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}`,
-          savedAt: Date.now()
-        });
-      } catch (e) {
-        // skip bad entry
-      }
-    }
+    try {
+      const file = input.files[0];
+      if (!file) return;
 
-    const { savedTabs = [] } = await chrome.storage.local.get();
-    const newTabs = [...savedTabs, ...tabs.filter(t => !savedTabs.find(st => st.url === t.url))];
-    await chrome.storage.local.set({ savedTabs: newTabs });
-    loadTabs();
-    showMessage("Tabs imported!", "success");
+      if (file.size > 10 * 1024 * 1024) {
+        // 10MB limit
+        showMessage("File too large. Maximum size is 10MB.", "warning");
+        return;
+      }
+
+      showMessage("Importing tabs...", "info");
+
+      const text = await file.text();
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (lines.length === 0) {
+        showMessage("File is empty or contains no valid data", "warning");
+        return;
+      }
+
+      const tabs = [];
+      let processed = 0,
+        invalid = 0;
+
+      for (let i = 0; i < lines.length; i += 2) {
+        const title = lines[i];
+        const url = lines[i + 1];
+        processed++;
+
+        if (!title || !url) {
+          invalid++;
+          continue;
+        }
+
+        const tabData = sanitizeTabData({ title, url });
+        if (tabData) {
+          tabs.push(tabData);
+        } else {
+          invalid++;
+        }
+      }
+
+      if (tabs.length === 0) {
+        showMessage("No valid tabs found in the file", "warning");
+        return;
+      }
+
+      const result = await safeStorageOperation(
+        () => chrome.storage.local.get(["savedTabs"]),
+        "loading existing tabs for import"
+      );
+
+      if (!result.success) return;
+
+      const { savedTabs = [] } = result.data;
+
+      // Check for duplicates and limits
+      const newTabs = tabs.filter(
+        (t) => !savedTabs.find((st) => st.url === t.url)
+      );
+      const finalTabs = [...savedTabs, ...newTabs];
+
+      if (finalTabs.length > 1000) {
+        const canImport = 1000 - savedTabs.length;
+        if (canImport <= 0) {
+          showMessage(
+            "Cannot import: storage limit reached (1000 tabs)",
+            "warning"
+          );
+          return;
+        }
+        showMessage(
+          `Only importing ${canImport} tabs due to storage limit`,
+          "warning",
+          4000
+        );
+        finalTabs.splice(1000);
+      }
+
+      const saveResult = await safeStorageOperation(
+        () => chrome.storage.local.set({ savedTabs: finalTabs }),
+        "saving imported tabs"
+      );
+
+      if (saveResult.success) {
+        loadTabs();
+        const imported = finalTabs.length - savedTabs.length;
+        const duplicates = tabs.length - newTabs.length;
+
+        let message = `${imported} tabs imported successfully!`;
+        if (duplicates > 0) message += ` ${duplicates} duplicates skipped.`;
+        if (invalid > 0) message += ` ${invalid} invalid entries ignored.`;
+
+        showMessage(message, "success", 4000);
+      }
+    } catch (error) {
+      console.error("Error importing tabs:", error);
+      showMessage(
+        "Failed to import tabs. Please check the file format.",
+        "warning"
+      );
+    }
   };
   input.click();
 };
 
 // ======= Search =======
 searchInput.oninput = async () => {
-  const { savedTabs = [] } = await chrome.storage.local.get();
-  const q = searchInput.value.toLowerCase();
-  const filtered = savedTabs.filter(t => t.title.toLowerCase().includes(q) || t.url.toLowerCase().includes(q));
-  renderTabs(filtered);
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs for search"
+    );
+
+    if (!result.success) {
+      renderTabs([]);
+      return;
+    }
+
+    const { savedTabs = [] } = result.data;
+    const q = searchInput.value.toLowerCase().trim();
+
+    if (q === "") {
+      renderTabs(savedTabs);
+      return;
+    }
+
+    const filtered = savedTabs.filter((t) => {
+      const titleMatch = t.title && t.title.toLowerCase().includes(q);
+      const urlMatch = t.url && t.url.toLowerCase().includes(q);
+      return titleMatch || urlMatch;
+    });
+
+    renderTabs(filtered);
+
+    // Show search result count
+    if (q && filtered.length !== savedTabs.length) {
+      const message =
+        filtered.length === 0
+          ? "No tabs found matching your search"
+          : `Found ${filtered.length} of ${savedTabs.length} tabs`;
+      setTimeout(() => showMessage(message, "info", 2000), 100);
+    }
+  } catch (error) {
+    console.error("Error searching tabs:", error);
+    showMessage("Search failed. Please try again.", "warning");
+    renderTabs([]);
+  }
 };
 
 // ======= Settings =======
@@ -252,52 +823,124 @@ function closeSettings() {
 settingsBtn.onclick = openSettings;
 closeSettingsBtn.onclick = closeSettings;
 saveSettingsBtn.onclick = async () => {
-  await chrome.storage.local.set({
-    theme: themeSelect.value,
-    font: fontSelect.value
-  });
-  closeSettings();
-  loadTabs();
-  showMessage("Settings saved!", "success");
+  try {
+    const theme = themeSelect.value;
+    const font = fontSelect.value;
+
+    // Validate settings
+    const validThemes = ["dark", "light", "blue"];
+    const validFonts = ["12px", "14px", "16px"];
+
+    if (!validThemes.includes(theme) || !validFonts.includes(font)) {
+      showMessage("Invalid settings values", "warning");
+      return;
+    }
+
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.set({ theme, font }),
+      "saving settings"
+    );
+
+    if (result.success) {
+      closeSettings();
+      loadTabs();
+      showMessage("Settings saved!", "success");
+    }
+  } catch (error) {
+    console.error("Error saving settings:", error);
+    showMessage("Failed to save settings. Please try again.", "warning");
+  }
 };
 
 // ======= Initial Load =======
 document.addEventListener("DOMContentLoaded", loadTabs);
 
 // ======= GOOGLE SIGN-IN & DRIVE SYNC (chrome.identity) =======
-const CLIENT_ID = '623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com'; // <-- Yahan apna Client ID daalein
-const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
-const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
+const CLIENT_ID =
+  "623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com"; // <-- Yahan apna Client ID daalein
+const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
+const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 
 let userEmail = null;
 let accessToken = null;
 
 // Google Sign-In
 googleSignInBtn.onclick = async () => {
-  chrome.identity.getAuthToken({ interactive: true }, async (token) => {
-    if (chrome.runtime.lastError || !token) {
-      showMessage("Sign-in failed!", "warning");
-      return;
-    }
-    accessToken = token;
-    // Get user email
-    const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: 'Bearer ' + accessToken }
+  try {
+    showMessage("Signing in...", "info");
+
+    chrome.identity.getAuthToken({ interactive: true }, async (token) => {
+      try {
+        if (chrome.runtime.lastError) {
+          throw new Error(
+            chrome.runtime.lastError.message || "Authentication failed"
+          );
+        }
+
+        if (!token) {
+          throw new Error("No authentication token received");
+        }
+
+        accessToken = token;
+
+        // Get user email with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+        const resp = await fetch(
+          "https://www.googleapis.com/oauth2/v2/userinfo",
+          {
+            headers: { Authorization: "Bearer " + accessToken },
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!resp.ok) {
+          throw new Error(
+            `Failed to get user info: ${resp.status} ${resp.statusText}`
+          );
+        }
+
+        const data = await resp.json();
+
+        if (!data.email) {
+          throw new Error("No email found in user info");
+        }
+
+        userEmail = data.email;
+        googleUserInfo.style.display = "block";
+        googleUserInfo.textContent = `Signed in as: ${userEmail}`;
+        googleSignInBtn.style.display = "none";
+        googleSignOutBtn.style.display = "inline-block";
+        showMessage("Signed in successfully!", "success");
+      } catch (error) {
+        console.error("Error during sign-in process:", error);
+
+        // Clean up on error
+        accessToken = null;
+        userEmail = null;
+
+        if (error.name === "AbortError") {
+          showMessage("Sign-in timed out. Please try again.", "warning");
+        } else if (error.message.includes("User denied")) {
+          showMessage("Sign-in was cancelled", "info");
+        } else {
+          showMessage("Sign-in failed. Please try again.", "warning");
+        }
+      }
     });
-    const data = await resp.json();
-    userEmail = data.email;
-    googleUserInfo.style.display = "block";
-    googleUserInfo.textContent = `Signed in as: ${userEmail}`;
-    googleSignInBtn.style.display = "none";
-    googleSignOutBtn.style.display = "inline-block";
-    showMessage("Signed in!", "success");
-  });
+  } catch (error) {
+    console.error("Error initiating sign-in:", error);
+    showMessage("Failed to initiate sign-in", "warning");
+  }
 };
 
 googleSignOutBtn.onclick = () => {
-  chrome.identity.getAuthToken({ interactive: false }, function(token) {
+  chrome.identity.getAuthToken({ interactive: false }, function (token) {
     if (token) {
-      chrome.identity.removeCachedAuthToken({ token: token }, function() {
+      chrome.identity.removeCachedAuthToken({ token: token }, function () {
         accessToken = null;
         userEmail = null;
         googleUserInfo.style.display = "none";
@@ -311,78 +954,258 @@ googleSignOutBtn.onclick = () => {
 
 // Sync to Google Drive
 syncToDriveBtn.onclick = async () => {
-  if (!accessToken) {
-    showMessage("Please sign in with Google first!", "warning");
-    return;
+  try {
+    if (!accessToken) {
+      showMessage("Please sign in with Google first!", "warning");
+      return;
+    }
+
+    showMessage("Syncing to Google Drive...", "info");
+
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading tabs for sync"
+    );
+
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+    const validTabs = savedTabs.filter(isValidTab);
+
+    if (validTabs.length === 0) {
+      showMessage("No valid tabs to sync", "warning");
+      return;
+    }
+
+    const fileContent = JSON.stringify(validTabs);
+
+    // Check file size (Drive has limits)
+    if (fileContent.length > 5 * 1024 * 1024) {
+      // 5MB limit
+      showMessage("Data too large for Google Drive sync", "warning");
+      return;
+    }
+
+    // Check if file exists
+    const listResp = await fetch(
+      `${DRIVE_FILES_URL}?spaces=appDataFolder&q=name='tabsaverpro.json'&fields=files(id,name)`,
+      {
+        headers: { Authorization: "Bearer " + accessToken },
+      }
+    );
+
+    if (!listResp.ok) {
+      throw new Error(
+        `Failed to list files: ${listResp.status} ${listResp.statusText}`
+      );
+    }
+
+    const listData = await listResp.json();
+    let fileId = null;
+    if (listData.files && listData.files.length > 0) {
+      fileId = listData.files[0].id;
+    }
+
+    const metadata = {
+      name: "tabsaverpro.json",
+      parents: ["appDataFolder"],
+    };
+
+    const boundary = "-------314159265358979323846";
+    const delimiter = "\r\n--" + boundary + "\r\n";
+    const close_delim = "\r\n--" + boundary + "--";
+
+    const multipartRequestBody =
+      delimiter +
+      "Content-Type: application/json\r\n\r\n" +
+      JSON.stringify(metadata) +
+      delimiter +
+      "Content-Type: application/json\r\n\r\n" +
+      fileContent +
+      close_delim;
+
+    let method = fileId ? "PATCH" : "POST";
+    let url = fileId
+      ? `${DRIVE_UPLOAD_URL}/${fileId}?uploadType=multipart`
+      : `${DRIVE_UPLOAD_URL}?uploadType=multipart`;
+
+    const uploadResp = await fetch(url, {
+      method: method,
+      headers: {
+        Authorization: "Bearer " + accessToken,
+        "Content-Type": 'multipart/related; boundary="' + boundary + '"',
+      },
+      body: multipartRequestBody,
+    });
+
+    if (!uploadResp.ok) {
+      const errorText = await uploadResp.text();
+      throw new Error(
+        `Upload failed: ${uploadResp.status} ${uploadResp.statusText} - ${errorText}`
+      );
+    }
+
+    showMessage(`${validTabs.length} tabs synced to Google Drive!`, "success");
+  } catch (error) {
+    console.error("Error syncing to Google Drive:", error);
+
+    if (error.message.includes("401")) {
+      showMessage("Authentication expired. Please sign in again.", "warning");
+      // Clear invalid token
+      accessToken = null;
+      userEmail = null;
+      googleUserInfo.style.display = "none";
+      googleSignInBtn.style.display = "inline-block";
+      googleSignOutBtn.style.display = "none";
+    } else if (error.message.includes("403")) {
+      showMessage(
+        "Access denied. Check your Google Drive permissions.",
+        "warning"
+      );
+    } else if (error.message.includes("Network")) {
+      showMessage(
+        "Network error. Please check your connection and try again.",
+        "warning"
+      );
+    } else {
+      showMessage(
+        "Failed to sync to Google Drive. Please try again.",
+        "warning"
+      );
+    }
   }
-  const { savedTabs = [] } = await chrome.storage.local.get();
-  const fileContent = JSON.stringify(savedTabs);
-
-  // Check if file exists
-  const listResp = await fetch(`${DRIVE_FILES_URL}?spaces=appDataFolder&q=name='tabsaverpro.json'&fields=files(id,name)`, {
-    headers: { Authorization: 'Bearer ' + accessToken }
-  });
-  const listData = await listResp.json();
-  let fileId = null;
-  if (listData.files && listData.files.length > 0) {
-    fileId = listData.files[0].id;
-  }
-
-  const metadata = {
-    name: 'tabsaverpro.json',
-    parents: ['appDataFolder']
-  };
-
-  const boundary = '-------314159265358979323846';
-  const delimiter = "\r\n--" + boundary + "\r\n";
-  const close_delim = "\r\n--" + boundary + "--";
-
-  const multipartRequestBody =
-    delimiter +
-    'Content-Type: application/json\r\n\r\n' +
-    JSON.stringify(metadata) +
-    delimiter +
-    'Content-Type: application/json\r\n\r\n' +
-    fileContent +
-    close_delim;
-
-  let method = fileId ? 'PATCH' : 'POST';
-  let url = fileId
-    ? `${DRIVE_UPLOAD_URL}/${fileId}?uploadType=multipart`
-    : `${DRIVE_UPLOAD_URL}?uploadType=multipart`;
-
-  await fetch(url, {
-    method: method,
-    headers: {
-      'Authorization': 'Bearer ' + accessToken,
-      'Content-Type': 'multipart/related; boundary="' + boundary + '"'
-    },
-    body: multipartRequestBody
-  });
-
-  showMessage("Tabs synced to Google Drive!", "success");
 };
 
 // Restore from Google Drive
 restoreFromDriveBtn.onclick = async () => {
-  if (!accessToken) {
-    showMessage("Please sign in with Google first!", "warning");
-    return;
+  try {
+    if (!accessToken) {
+      showMessage("Please sign in with Google first!", "warning");
+      return;
+    }
+
+    showMessage("Restoring from Google Drive...", "info");
+
+    const listResp = await fetch(
+      `${DRIVE_FILES_URL}?spaces=appDataFolder&q=name='tabsaverpro.json'&fields=files(id,name)`,
+      {
+        headers: { Authorization: "Bearer " + accessToken },
+      }
+    );
+
+    if (!listResp.ok) {
+      throw new Error(
+        `Failed to list files: ${listResp.status} ${listResp.statusText}`
+      );
+    }
+
+    const listData = await listResp.json();
+    if (!listData.files || listData.files.length === 0) {
+      showMessage("No backup found in Google Drive!", "warning");
+      return;
+    }
+
+    const fileId = listData.files[0].id;
+    const fileResp = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: { Authorization: "Bearer " + accessToken },
+      }
+    );
+
+    if (!fileResp.ok) {
+      throw new Error(
+        `Failed to download file: ${fileResp.status} ${fileResp.statusText}`
+      );
+    }
+
+    const responseText = await fileResp.text();
+    let tabs;
+
+    try {
+      tabs = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error("Invalid backup file format");
+    }
+
+    if (!Array.isArray(tabs)) {
+      throw new Error("Backup file contains invalid data structure");
+    }
+
+    // Validate and clean restored tabs
+    const validTabs = tabs.filter((tab) => {
+      const isValid = isValidTab(tab);
+      if (!isValid) {
+        console.warn("Invalid tab in backup:", tab);
+      }
+      return isValid;
+    });
+
+    if (validTabs.length === 0) {
+      showMessage("No valid tabs found in backup", "warning");
+      return;
+    }
+
+    // Ask user for confirmation if there are existing tabs
+    const currentResult = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "checking existing tabs"
+    );
+
+    if (!currentResult.success) return;
+
+    const { savedTabs: currentTabs = [] } = currentResult.data;
+
+    if (currentTabs.length > 0) {
+      const confirmed = confirm(
+        `This will replace your ${currentTabs.length} current tabs with ${validTabs.length} tabs from backup. Continue?`
+      );
+      if (!confirmed) return;
+    }
+
+    const saveResult = await safeStorageOperation(
+      () => chrome.storage.local.set({ savedTabs: validTabs }),
+      "restoring tabs from backup"
+    );
+
+    if (saveResult.success) {
+      loadTabs();
+      let message = `${validTabs.length} tabs restored from Google Drive!`;
+      if (validTabs.length !== tabs.length) {
+        message += ` (${
+          tabs.length - validTabs.length
+        } invalid entries were skipped)`;
+      }
+      showMessage(message, "success", 4000);
+    }
+  } catch (error) {
+    console.error("Error restoring from Google Drive:", error);
+
+    if (error.message.includes("401")) {
+      showMessage("Authentication expired. Please sign in again.", "warning");
+      // Clear invalid token
+      accessToken = null;
+      userEmail = null;
+      googleUserInfo.style.display = "none";
+      googleSignInBtn.style.display = "inline-block";
+      googleSignOutBtn.style.display = "none";
+    } else if (error.message.includes("403")) {
+      showMessage(
+        "Access denied. Check your Google Drive permissions.",
+        "warning"
+      );
+    } else if (error.message.includes("Network")) {
+      showMessage(
+        "Network error. Please check your connection and try again.",
+        "warning"
+      );
+    } else if (error.message.includes("Invalid backup")) {
+      showMessage("Backup file is corrupted or invalid", "warning");
+    } else {
+      showMessage(
+        "Failed to restore from Google Drive. Please try again.",
+        "warning"
+      );
+    }
   }
-  const listResp = await fetch(`${DRIVE_FILES_URL}?spaces=appDataFolder&q=name='tabsaverpro.json'&fields=files(id,name)`, {
-    headers: { Authorization: 'Bearer ' + accessToken }
-  });
-  const listData = await listResp.json();
-  if (!listData.files || listData.files.length === 0) {
-    showMessage("No backup found in Google Drive!", "warning");
-    return;
-  }
-  const fileId = listData.files[0].id;
-  const fileResp = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-    headers: { Authorization: 'Bearer ' + accessToken }
-  });
-  const tabs = await fileResp.json();
-  await chrome.storage.local.set({ savedTabs: tabs });
-  loadTabs();
-  showMessage("Tabs restored from Google Drive!", "success");
 };
