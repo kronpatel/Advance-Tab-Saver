@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Saver Pro",
+  "version": "1.0",
+  "description": "Tab Saver Pro is a powerful Chrome extension that allows you to save, organize, and manage your browser tabs efficiently. Features include saving individual or all tabs, searching through saved tabs, exporting/importing tab lists, customizable themes and font sizes, and seamless synchronization with Google Drive for backup and restore.",
+  "author": "KERZOX",
+  "permissions": ["tabs", "storage", "downloads", "activeTab", "identity"],
+  "host_permissions": ["<all_urls>"],
+  "oauth2": {
+    "client_id": "623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
