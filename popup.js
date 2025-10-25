@@ -1,3 +1,8 @@
+// ======= Constants =======
+const DEFAULT_FAVICON =
+  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+const MAX_SAVED_TABS = 1000;
+
 // ======= DOM Elements =======
 const tabList = document.getElementById("tabList");
 const tabCount = document.getElementById("tabCount");
@@ -32,8 +37,30 @@ const statsTab = document.getElementById("statsTab");
 const actionsContent = document.getElementById("actionsContent");
 const statsContent = document.getElementById("statsContent");
 
+// ======= DOM Validation =======
+function validateDOMElements() {
+  const requiredElements = [
+    "tabList",
+    "tabCount",
+    "messageBar",
+    "saveCurrentBtn",
+    "saveAllBtn",
+  ];
+
+  const missing = requiredElements.filter((id) => !document.getElementById(id));
+  if (missing.length > 0) {
+    console.error("Missing DOM elements:", missing);
+    return false;
+  }
+  return true;
+}
+
 // ======= Message Bar Function =======
 function showMessage(msg, type = "info", duration = 3000) {
+  if (!messageBar) {
+    console.error("Message bar not found, message:", msg);
+    return;
+  }
   messageBar.textContent = msg;
   messageBar.className = "ag-message " + type;
   messageBar.style.display = "block";
@@ -46,21 +73,42 @@ function showMessage(msg, type = "info", duration = 3000) {
 function isValidUrl(string) {
   try {
     const url = new URL(string);
-    return url.protocol === "http:" || url.protocol === "https:";
+    // Allow common web protocols and browser internal URLs
+    const allowedProtocols = [
+      "http:",
+      "https:",
+      "chrome:",
+      "chrome-extension:",
+      "moz-extension:",
+      "about:",
+      "file:",
+      "ftp:",
+    ];
+    return allowedProtocols.includes(url.protocol);
   } catch (_) {
     return false;
   }
 }
 
 function isValidTab(tab) {
+  if (!tab || typeof tab.title !== "string" || typeof tab.url !== "string") {
+    return false;
+  }
+
+  // Basic length checks
+  if (tab.url.length === 0 || tab.url.length > 2048 || tab.title.length > 500) {
+    return false;
+  }
+
+  // More permissive URL validation - accept any URL with a protocol
+  // or any string that looks like a URL
   return (
-    tab &&
-    typeof tab.title === "string" &&
-    typeof tab.url === "string" &&
-    isValidUrl(tab.url) &&
-    tab.title.length > 0 &&
-    tab.title.length <= 500 &&
-    tab.url.length <= 2048
+    isValidUrl(tab.url) ||
+    tab.url.includes("://") ||
+    tab.url.startsWith("chrome://") ||
+    tab.url.startsWith("about:") ||
+    tab.url.startsWith("file://") ||
+    tab.url.startsWith("data:")
   );
 }
 
@@ -71,23 +119,30 @@ function sanitizeTabData(tab) {
   if (!favicon && tab.url) {
     try {
       const urlObj = new URL(tab.url);
-      favicon = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
+      // Only use Google favicon service for http/https URLs
+      if (urlObj.protocol === "http:" || urlObj.protocol === "https:") {
+        favicon = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
+      } else {
+        favicon = DEFAULT_FAVICON;
+      }
     } catch (error) {
-      favicon =
-        'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+      favicon = DEFAULT_FAVICON;
     }
   }
 
   const sanitized = {
     title: String(tab.title || "Untitled").slice(0, 500),
     url: String(tab.url || "").slice(0, 2048),
-    favicon:
-      favicon ||
-      'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>',
+    favicon: favicon || DEFAULT_FAVICON,
     savedAt: Date.now(),
   };
 
-  return isValidTab(sanitized) ? sanitized : null;
+  const isValid = isValidTab(sanitized);
+  if (!isValid) {
+    console.log("Tab validation failed for:", sanitized);
+  }
+
+  return isValid ? sanitized : null;
 }
 
 async function safeStorageOperation(operation, errorContext) {
@@ -122,23 +177,15 @@ async function validateStorageData() {
     const { savedTabs = [] } = await chrome.storage.local.get(["savedTabs"]);
 
     if (!Array.isArray(savedTabs)) {
-      console.warn("savedTabs is not an array, resetting...");
       await chrome.storage.local.set({ savedTabs: [] });
       return [];
     }
 
     const validTabs = savedTabs.filter((tab) => {
-      const isValid = isValidTab(tab);
-      if (!isValid) {
-        console.warn("Invalid tab found and removed:", tab);
-      }
-      return isValid;
+      return isValidTab(tab);
     });
 
     if (validTabs.length !== savedTabs.length) {
-      console.log(
-        `Cleaned ${savedTabs.length - validTabs.length} invalid tabs`
-      );
       await chrome.storage.local.set({ savedTabs: validTabs });
     }
 
@@ -206,18 +253,10 @@ function renderTabs(tabs) {
     tabList.innerHTML = "";
 
     if (!Array.isArray(tabs)) {
-      console.error("renderTabs received non-array:", tabs);
       tabs = [];
     }
 
     const validTabs = tabs.filter(isValidTab);
-    if (validTabs.length !== tabs.length) {
-      console.warn(
-        `${
-          tabs.length - validTabs.length
-        } invalid tabs filtered out during render`
-      );
-    }
 
     const grouped = {};
     validTabs.forEach((tab) => {
@@ -226,7 +265,7 @@ function renderTabs(tabs) {
         if (!grouped[date]) grouped[date] = [];
         grouped[date].push(tab);
       } catch (error) {
-        console.warn("Error processing tab for grouping:", tab, error);
+        // Skip invalid date, tab will be ungrouped
       }
     });
 
@@ -243,15 +282,11 @@ function renderTabs(tabs) {
             const div = document.createElement("div");
             div.className = "tab";
 
-            // Create elements safely to avoid XSS
             const img = document.createElement("img");
             img.className = "favicon";
-            img.src =
-              tab.favicon ||
-              'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+            img.src = tab.favicon || DEFAULT_FAVICON;
             img.onerror = () => {
-              img.src =
-                'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+              img.src = DEFAULT_FAVICON;
             };
 
             const titleSpan = document.createElement("span");
@@ -278,13 +313,13 @@ function renderTabs(tabs) {
 
             group.appendChild(div);
           } catch (error) {
-            console.error("Error rendering individual tab:", tab, error);
+            // Skip rendering this tab if there's an error
           }
         });
 
         tabList.appendChild(group);
       } catch (error) {
-        console.error("Error rendering tab group:", date, error);
+        // Skip rendering this group if there's an error
       }
     }
 
@@ -356,7 +391,17 @@ tabList.addEventListener("click", async (e) => {
       );
 
       if (saveResult.success) {
-        loadTabs();
+        // Remove the tab element from the DOM for better performance
+        const tabDiv = tabList
+          .querySelector(`.tab button.delete[data-url="${url}"]`)
+          ?.closest(".tab");
+        if (tabDiv) {
+          tabDiv.remove();
+          // Update tab count
+          const newCount = tabList.querySelectorAll(".tab").length;
+          tabCount.textContent = newCount;
+          if (totalTabs) totalTabs.textContent = `Total saved: ${newCount}`;
+        }
         showMessage("Tab deleted!", "success");
       }
     }
@@ -380,7 +425,20 @@ saveCurrentBtn.onclick = async () => {
 
     const sanitizedTab = sanitizeTabData(tab);
     if (!sanitizedTab) {
-      showMessage("Cannot save this tab (invalid URL or data)", "warning");
+      console.log("Failed to sanitize tab:", tab);
+      // More specific error message
+      if (!tab.url || tab.url.length === 0) {
+        showMessage("Cannot save tab: URL is empty", "warning");
+      } else if (!tab.title || tab.title.length === 0) {
+        showMessage("Cannot save tab: Title is empty", "warning");
+      } else if (tab.url.length > 2048) {
+        showMessage("Cannot save tab: URL is too long", "warning");
+      } else {
+        showMessage(
+          `Cannot save this tab: ${tab.title} (${tab.url})`,
+          "warning"
+        );
+      }
       return;
     }
 
@@ -399,9 +457,9 @@ saveCurrentBtn.onclick = async () => {
     }
 
     // Check storage limits
-    if (savedTabs.length >= 1000) {
+    if (savedTabs.length >= MAX_SAVED_TABS) {
       showMessage(
-        "Maximum number of saved tabs reached (1000). Please delete some tabs.",
+        `Maximum number of saved tabs reached (${MAX_SAVED_TABS}). Please delete some tabs.`,
         "warning",
         5000
       );
@@ -460,9 +518,9 @@ saveAllBtn.onclick = async () => {
         skipped++;
       } else {
         // Check total limit
-        if (newTabs.length >= 1000) {
+        if (newTabs.length >= MAX_SAVED_TABS) {
           showMessage(
-            `Stopped at 1000 tabs limit. ${added} saved, ${
+            `Stopped at ${MAX_SAVED_TABS} tabs limit. ${added} saved, ${
               tabs.length - added - skipped - invalid
             } remaining.`,
             "warning",
@@ -544,7 +602,6 @@ openAllBtn.onclick = async () => {
           await chrome.tabs.create({ url: tab.url });
           opened++;
         } else {
-          console.warn("Invalid URL skipped:", tab.url);
           failed++;
         }
       } catch (error) {
@@ -625,13 +682,6 @@ exportBtn.onclick = async (e) => {
     }
 
     const validTabs = savedTabs.filter(isValidTab);
-    if (validTabs.length !== savedTabs.length) {
-      console.warn(
-        `${
-          savedTabs.length - validTabs.length
-        } invalid tabs excluded from export`
-      );
-    }
 
     const exportText = validTabs
       .map((t) => `${t.title}\n${t.url}`)
@@ -684,13 +734,11 @@ importBtn.onclick = () => {
       }
 
       const tabs = [];
-      let processed = 0,
-        invalid = 0;
+      let invalid = 0;
 
       for (let i = 0; i < lines.length; i += 2) {
         const title = lines[i];
-        const url = lines[i + 1];
-        processed++;
+        const url = i + 1 < lines.length ? lines[i + 1] : null;
 
         if (!title || !url) {
           invalid++;
@@ -725,11 +773,11 @@ importBtn.onclick = () => {
       );
       const finalTabs = [...savedTabs, ...newTabs];
 
-      if (finalTabs.length > 1000) {
-        const canImport = 1000 - savedTabs.length;
+      if (finalTabs.length > MAX_SAVED_TABS) {
+        const canImport = MAX_SAVED_TABS - savedTabs.length;
         if (canImport <= 0) {
           showMessage(
-            "Cannot import: storage limit reached (1000 tabs)",
+            `Cannot import: storage limit reached (${MAX_SAVED_TABS} tabs)`,
             "warning"
           );
           return;
@@ -739,7 +787,7 @@ importBtn.onclick = () => {
           "warning",
           4000
         );
-        finalTabs.splice(1000);
+        finalTabs.splice(MAX_SAVED_TABS);
       }
 
       const saveResult = await safeStorageOperation(
@@ -804,7 +852,11 @@ searchInput.oninput = async () => {
         filtered.length === 0
           ? "No tabs found matching your search"
           : `Found ${filtered.length} of ${savedTabs.length} tabs`;
-      setTimeout(() => showMessage(message, "info", 2000), 100);
+      if (window.searchMessageTimeout)
+        clearTimeout(window.searchMessageTimeout);
+      window.searchMessageTimeout = setTimeout(() => {
+        showMessage(message, "info", 2000);
+      }, 200);
     }
   } catch (error) {
     console.error("Error searching tabs:", error);
@@ -853,11 +905,19 @@ saveSettingsBtn.onclick = async () => {
 };
 
 // ======= Initial Load =======
-document.addEventListener("DOMContentLoaded", loadTabs);
+document.addEventListener("DOMContentLoaded", () => {
+  if (!validateDOMElements()) {
+    console.error(
+      "Critical DOM elements missing. Extension may not work properly."
+    );
+    return;
+  }
+  loadTabs();
+});
 
 // ======= GOOGLE SIGN-IN & DRIVE SYNC (chrome.identity) =======
 const CLIENT_ID =
-  "623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com"; // <-- Yahan apna Client ID daalein
+  "623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com";
 const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 
@@ -1134,11 +1194,7 @@ restoreFromDriveBtn.onclick = async () => {
 
     // Validate and clean restored tabs
     const validTabs = tabs.filter((tab) => {
-      const isValid = isValidTab(tab);
-      if (!isValid) {
-        console.warn("Invalid tab in backup:", tab);
-      }
-      return isValid;
+      return isValidTab(tab);
     });
 
     if (validTabs.length === 0) {
