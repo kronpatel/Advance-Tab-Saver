@@ -905,24 +905,77 @@ saveSettingsBtn.onclick = async () => {
 };
 
 // ======= Initial Load =======
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   if (!validateDOMElements()) {
     console.error(
       "Critical DOM elements missing. Extension may not work properly."
     );
     return;
   }
+
+  // Restore Google Auth state
+  await restoreGoogleAuthState();
+
   loadTabs();
 });
 
 // ======= GOOGLE SIGN-IN & DRIVE SYNC (chrome.identity) =======
-const CLIENT_ID =
-  "623086085237-ujfrhp5rvkg2j38h7s2hgu94944qg361.apps.googleusercontent.com";
-const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
-const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
+// Configuration is loaded from config.js
+// To change your Client ID, edit config.js file
+const CLIENT_ID = CONFIG.GOOGLE_CLIENT_ID;
+const DRIVE_UPLOAD_URL = CONFIG.DRIVE_UPLOAD_URL;
+const DRIVE_FILES_URL = CONFIG.DRIVE_FILES_URL;
 
 let userEmail = null;
 let accessToken = null;
+
+// Restore Google Auth state from storage
+async function restoreGoogleAuthState() {
+  try {
+    const result = await chrome.storage.local.get([
+      "googleAuthToken",
+      "googleUserEmail",
+      "googleTokenExpiry",
+    ]);
+
+    if (
+      result.googleAuthToken &&
+      result.googleUserEmail &&
+      result.googleTokenExpiry
+    ) {
+      // Check if token has expired
+      if (Date.now() < result.googleTokenExpiry) {
+        // Token is still valid
+        accessToken = result.googleAuthToken;
+        userEmail = result.googleUserEmail;
+
+        // Update UI to show signed-in state
+        googleUserInfo.style.display = "block";
+        googleUserInfo.textContent = `Signed in as: ${userEmail}`;
+        googleSignInBtn.style.display = "none";
+        googleSignOutBtn.style.display = "inline-block";
+
+        console.log("Google auth restored from storage");
+      } else {
+        // Token has expired, clear it
+        console.log("Stored auth token has expired");
+        await chrome.storage.local.remove([
+          "googleAuthToken",
+          "googleUserEmail",
+          "googleTokenExpiry",
+        ]);
+        // Also remove from Chrome's cache
+        chrome.identity.getAuthToken({ interactive: false }, function (token) {
+          if (token) {
+            chrome.identity.removeCachedAuthToken({ token: token });
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error restoring Google auth state:", error);
+  }
+}
 
 // Google Sign-In
 googleSignInBtn.onclick = async () => {
@@ -970,6 +1023,15 @@ googleSignInBtn.onclick = async () => {
         }
 
         userEmail = data.email;
+
+        // Store auth data with 24-hour expiry
+        const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours from now
+        await chrome.storage.local.set({
+          googleAuthToken: accessToken,
+          googleUserEmail: userEmail,
+          googleTokenExpiry: tokenExpiry,
+        });
+
         googleUserInfo.style.display = "block";
         googleUserInfo.textContent = `Signed in as: ${userEmail}`;
         googleSignInBtn.style.display = "none";
@@ -1000,14 +1062,25 @@ googleSignInBtn.onclick = async () => {
 googleSignOutBtn.onclick = () => {
   chrome.identity.getAuthToken({ interactive: false }, function (token) {
     if (token) {
-      chrome.identity.removeCachedAuthToken({ token: token }, function () {
-        accessToken = null;
-        userEmail = null;
-        googleUserInfo.style.display = "none";
-        googleSignInBtn.style.display = "inline-block";
-        googleSignOutBtn.style.display = "none";
-        showMessage("Signed out!", "success");
-      });
+      chrome.identity.removeCachedAuthToken(
+        { token: token },
+        async function () {
+          accessToken = null;
+          userEmail = null;
+
+          // Clear stored auth data
+          await chrome.storage.local.remove([
+            "googleAuthToken",
+            "googleUserEmail",
+            "googleTokenExpiry",
+          ]);
+
+          googleUserInfo.style.display = "none";
+          googleSignInBtn.style.display = "inline-block";
+          googleSignOutBtn.style.display = "none";
+          showMessage("Signed out!", "success");
+        }
+      );
     }
   });
 };
@@ -1066,10 +1139,10 @@ syncToDriveBtn.onclick = async () => {
       fileId = listData.files[0].id;
     }
 
-    const metadata = {
-      name: "tabsaverpro.json",
-      parents: ["appDataFolder"],
-    };
+    // Create metadata - only include parents for new files (POST), not for updates (PATCH)
+    const metadata = fileId
+      ? { name: "tabsaverpro.json" } // Update existing file - no parents
+      : { name: "tabsaverpro.json", parents: ["appDataFolder"] }; // New file - include parents
 
     const boundary = "-------314159265358979323846";
     const delimiter = "\r\n--" + boundary + "\r\n";
@@ -1114,6 +1187,11 @@ syncToDriveBtn.onclick = async () => {
       // Clear invalid token
       accessToken = null;
       userEmail = null;
+      await chrome.storage.local.remove([
+        "googleAuthToken",
+        "googleUserEmail",
+        "googleTokenExpiry",
+      ]);
       googleUserInfo.style.display = "none";
       googleSignInBtn.style.display = "inline-block";
       googleSignOutBtn.style.display = "none";
@@ -1242,6 +1320,11 @@ restoreFromDriveBtn.onclick = async () => {
       // Clear invalid token
       accessToken = null;
       userEmail = null;
+      await chrome.storage.local.remove([
+        "googleAuthToken",
+        "googleUserEmail",
+        "googleTokenExpiry",
+      ]);
       googleUserInfo.style.display = "none";
       googleSignInBtn.style.display = "inline-block";
       googleSignOutBtn.style.display = "none";
