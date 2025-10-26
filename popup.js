@@ -593,34 +593,31 @@ openAllBtn.onclick = async () => {
       if (!confirmed) return;
     }
 
-    let opened = 0,
-      failed = 0;
+    showMessage(`Opening ${savedTabs.length} tabs...`, "info");
 
-    for (const tab of savedTabs) {
-      try {
-        if (isValidUrl(tab.url)) {
-          await chrome.tabs.create({ url: tab.url });
-          opened++;
-        } else {
-          failed++;
-        }
-      } catch (error) {
-        console.error("Error opening tab:", tab.url, error);
-        failed++;
+    // Use background script to open tabs (more reliable)
+    const response = await chrome.runtime.sendMessage({
+      action: "openTabs",
+      tabs: savedTabs,
+    });
+
+    if (response && response.success) {
+      if (response.failCount === 0) {
+        showMessage(
+          `Successfully opened all ${response.successCount} tabs!`,
+          "success"
+        );
+      } else {
+        showMessage(
+          `Opened ${response.successCount} tabs, ${response.failCount} failed`,
+          "warning"
+        );
       }
-    }
-
-    if (failed > 0) {
-      showMessage(
-        `${opened} tabs opened, ${failed} failed to open.`,
-        "warning",
-        4000
-      );
     } else {
-      showMessage(`All ${opened} tabs opened successfully!`, "success");
+      showMessage("Failed to open tabs. Please try again.", "warning");
     }
   } catch (error) {
-    console.error("Error opening all tabs:", error);
+    console.error("Error opening tabs:", error);
     showMessage("Failed to open tabs. Please try again.", "warning");
   }
 };
