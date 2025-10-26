@@ -352,8 +352,9 @@ async function loadTabs() {
     }
 
     const { savedTabs, theme = "dark", font = "14px" } = result.data;
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.style.setProperty("--font-size", font);
+
+    // Apply theme and font settings
+    applySettings(theme, font);
 
     // Validate and clean data
     const validatedTabs = await validateStorageData();
@@ -870,12 +871,30 @@ searchInput.oninput = async () => {
 };
 
 // ======= Settings =======
-function openSettings() {
+async function openSettings() {
   settingsModal.showModal();
+
+  // Load current settings
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["theme", "font"]),
+      "loading settings"
+    );
+
+    if (result.success) {
+      const { theme = "dark", font = "14px" } = result.data;
+      themeSelect.value = theme;
+      fontSelect.value = font;
+    }
+  } catch (error) {
+    console.error("Error loading settings:", error);
+  }
 }
+
 function closeSettings() {
   settingsModal.close();
 }
+
 settingsBtn.onclick = openSettings;
 closeSettingsBtn.onclick = closeSettings;
 
@@ -898,7 +917,7 @@ saveSettingsBtn.onclick = async () => {
     const font = fontSelect.value;
 
     // Validate settings
-    const validThemes = ["dark", "light", "blue"];
+    const validThemes = ["dark", "light", "grey"];
     const validFonts = ["12px", "14px", "16px"];
 
     if (!validThemes.includes(theme) || !validFonts.includes(font)) {
@@ -912,8 +931,9 @@ saveSettingsBtn.onclick = async () => {
     );
 
     if (result.success) {
+      // Apply settings immediately
+      applySettings(theme, font);
       closeSettings();
-      loadTabs();
       showMessage("Settings saved!", "success");
     }
   } catch (error) {
@@ -921,6 +941,12 @@ saveSettingsBtn.onclick = async () => {
     showMessage("Failed to save settings. Please try again.", "warning");
   }
 };
+
+// Apply theme and font settings
+function applySettings(theme, font) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.setAttribute("data-font-size", font);
+}
 
 // ======= Initial Load =======
 document.addEventListener("DOMContentLoaded", async () => {
