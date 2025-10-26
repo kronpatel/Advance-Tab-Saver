@@ -1,81 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Tab Saver Pro</title>
-  <link rel="stylesheet" href="style.css">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-</head>
-<body>
-  <div class="ag-main-card">
-    <div class="ag-header">
-      <img src="icons/icon48.png" alt="Tab Saver Pro" class="ag-logo">
-      <span class="ag-title">TAB SAVER PRO</span>
-      <span class="material-icons ag-settings" id="settingsBtn" title="Settings">settings</span>
-    </div>
-    <div id="messageBar" class="ag-message"></div>
-    <div id="googleUserInfo" style="display:none; font-size:12px; margin-bottom:10px;"></div>
-    <button id="googleSignInBtn">Sign in with Google</button>
-    <button id="googleSignOutBtn" style="display:none;">Sign out</button>
-    <div class="ag-status">
-      <div class="ag-domain" id="currentDomain">Your Tabs</div>
-      <div class="ag-blocked"><span id="tabCount">0</span> <span>Saved</span></div>
-      <div class="ag-blocked-total" id="totalTabs"></div>
-      <div class="ag-check">
-        <span class="material-icons ag-check-icon">check_circle</span>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tab Saver Pro</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="ag-main-card">
+      <div class="ag-header">
+        <img src="icons/icon48.png" alt="Tab Saver Pro" class="ag-logo" />
+        <span class="ag-title">TAB SAVER PRO</span>
+        <span
+          class="material-icons ag-settings"
+          id="settingsBtn"
+          title="Settings"
+          >settings</span
+        >
       </div>
-      <a href="#" class="ag-link" style="margin-top: 6px;" id="exportBtn">Export your tabs</a>
-    </div>
-    <div class="ag-tabs">
-      <button class="ag-tab-btn ag-tab-btn-active" id="actionsTab">Actions</button>
-      <button class="ag-tab-btn" id="statsTab">Statistics</button>
-    </div>
-    <div class="ag-tab-content" id="actionsContent">
-      <div class="ag-list">
-        <button class="ag-list-item" id="saveCurrentBtn"><span class="material-icons ag-list-icon">bookmark_add</span>Save Current Tab</button>
-        <button class="ag-list-item" id="saveAllBtn"><span class="material-icons ag-list-icon">save</span>Save All Tabs</button>
-        <button class="ag-list-item" id="openAllBtn"><span class="material-icons ag-list-icon">folder_open</span>Open All</button>
-        <button class="ag-list-item" id="clearBtn"><span class="material-icons ag-list-icon">delete</span>Delete All</button>
-        <button class="ag-list-item" id="importBtn"><span class="material-icons ag-list-icon">file_upload</span>Import Tabs</button>
-        <button class="ag-list-item" id="syncToDriveBtn">Sync to Google Drive</button>
-        <button class="ag-list-item" id="restoreFromDriveBtn">Restore from Google Drive</button>
-        <input id="searchInput" class="ag-input" type="text" placeholder="Search tabs..." />
+      <div id="messageBar" class="ag-message"></div>
+      <div
+        id="googleUserInfo"
+        style="display: none; font-size: 12px; margin-bottom: 10px"
+      ></div>
+      <button id="googleSignInBtn">Sign in with Google</button>
+      <button id="googleSignOutBtn" style="display: none">Sign out</button>
+      <div class="ag-status">
+        <div class="ag-domain" id="currentDomain">Your Tabs</div>
+        <div class="ag-blocked">
+          <span id="tabCount">0</span> <span>Saved</span>
+        </div>
+        <div class="ag-blocked-total" id="totalTabs"></div>
+        <div class="ag-check">
+          <span class="material-icons ag-check-icon">check_circle</span>
+        </div>
+        <a href="#" class="ag-link" style="margin-top: 6px" id="exportBtn"
+          >Export your tabs</a
+        >
       </div>
-      <div id="tabList"></div>
-    </div>
-    <div class="ag-tab-content" id="statsContent" style="display:none;">
-      <div class="ag-stats">
-        <div>Total Tabs Saved: <span id="statsTotal"></span></div>
-        <div>Last Saved: <span id="statsLast"></span></div>
+      <div class="ag-tabs">
+        <button class="ag-tab-btn ag-tab-btn-active" id="actionsTab">
+          Actions
+        </button>
+        <button class="ag-tab-btn" id="statsTab">Statistics</button>
+      </div>
+      <div class="ag-tab-content" id="actionsContent">
+        <div class="ag-list">
+          <button class="ag-list-item" id="saveCurrentBtn">
+            <span class="material-icons ag-list-icon">bookmark_add</span>Save
+            Current Tab
+          </button>
+          <button class="ag-list-item" id="saveAllBtn">
+            <span class="material-icons ag-list-icon">save</span>Save All Tabs
+          </button>
+          <button class="ag-list-item" id="openAllBtn">
+            <span class="material-icons ag-list-icon">folder_open</span>Open All
+          </button>
+          <button class="ag-list-item" id="clearBtn">
+            <span class="material-icons ag-list-icon">delete</span>Delete All
+          </button>
+          <button class="ag-list-item" id="importBtn">
+            <span class="material-icons ag-list-icon">file_upload</span>Import
+            Tabs
+          </button>
+          <button class="ag-list-item" id="syncToDriveBtn">
+            Sync to Google Drive
+          </button>
+          <button class="ag-list-item" id="restoreFromDriveBtn">
+            Restore from Google Drive
+          </button>
+          <input
+            id="searchInput"
+            class="ag-input"
+            type="text"
+            placeholder="Search tabs..."
+          />
+        </div>
+        <div id="tabList"></div>
+      </div>
+      <div class="ag-tab-content" id="statsContent" style="display: none">
+        <div class="ag-stats">
+          <div>Total Tabs Saved: <span id="statsTotal"></span></div>
+          <div>Last Saved: <span id="statsLast"></span></div>
+        </div>
+      </div>
+      <div class="ag-footer">
+        <span>Tab Saver Pro &copy; 2025 KERZOX. All rights reserved.</span>
       </div>
     </div>
-    <div class="ag-footer">
-      <span>Tab Saver Pro &copy; 2025 KERZOX. All rights reserved.</span>
-    </div>
-  </div>
 
-  <dialog id="settingsModal" class="ag-dialog">
-    <h3>Settings</h3>
-    <label>Theme:
-      <select id="themeSelect" class="ag-input">
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-        <option value="blue">Blue</option>
-      </select>
-    </label>
-    <br/>
-    <label>Font Size:
-      <select id="fontSelect" class="ag-input">
-        <option value="12px">Small</option>
-        <option value="14px">Medium</option>
-        <option value="16px">Large</option>
-      </select>
-    </label>
-    <br/><br/>
-    <button id="saveSettingsBtn" class="ag-btn">Save</button>
-    <button id="closeSettingsBtn" class="ag-btn">Close</button>
-  </dialog>
+    <dialog id="settingsModal" class="ag-dialog">
+      <h3>Settings</h3>
+      <label
+        >Theme:
+        <select id="themeSelect" class="ag-input">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="blue">Blue</option>
+        </select>
+      </label>
+      <br />
+      <label
+        >Font Size:
+        <select id="fontSelect" class="ag-input">
+          <option value="12px">Small</option>
+          <option value="14px">Medium</option>
+          <option value="16px">Large</option>
+        </select>
+      </label>
+      <br /><br />
+      <button id="saveSettingsBtn" class="ag-btn">Save</button>
+      <button id="closeSettingsBtn" class="ag-btn">Close</button>
+    </dialog>
 
-  <script src="popup.js"></script>
-</body>
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+  </body>
 </html>
