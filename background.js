@@ -63,6 +63,54 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
+// Handle messages from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "openTabs") {
+    console.log(
+      "Background: Received request to open tabs",
+      request.tabs.length
+    );
+
+    // Open tabs from background script (has fewer restrictions)
+    const openPromises = request.tabs.map(async (tab, index) => {
+      try {
+        console.log(`Background: Opening tab ${index + 1}: ${tab.title}`);
+        const createdTab = await chrome.tabs.create({ url: tab.url });
+        console.log(
+          `Background: Successfully opened tab ${index + 1} with ID: ${
+            createdTab.id
+          }`
+        );
+        return { success: true, tab, createdTab };
+      } catch (error) {
+        console.error(`Background: Failed to open tab ${index + 1}:`, error);
+        return { success: false, error: error.message, tab };
+      }
+    });
+
+    Promise.allSettled(openPromises).then((results) => {
+      const successCount = results.filter(
+        (r) => r.status === "fulfilled" && r.value.success
+      ).length;
+      const failCount = results.length - successCount;
+
+      console.log(
+        `Background: Tab opening complete: ${successCount} success, ${failCount} failed`
+      );
+
+      // Send results back to popup
+      sendResponse({
+        success: true,
+        results: results,
+        successCount: successCount,
+        failCount: failCount,
+      });
+    });
+
+    return true; // Keep message channel open for async response
+  }
+});
+
 // Error handler for any unhandled errors in the service worker
 self.addEventListener("error", (event) => {
   console.error(
