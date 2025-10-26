@@ -203,13 +203,17 @@ async function validateStorageData() {
 // ======= Tab Switching =======
 actionsTab.onclick = () => {
   actionsTab.classList.add("ag-tab-btn-active");
+  actionsTab.setAttribute("aria-selected", "true");
   statsTab.classList.remove("ag-tab-btn-active");
+  statsTab.setAttribute("aria-selected", "false");
   actionsContent.style.display = "";
   statsContent.style.display = "none";
 };
 statsTab.onclick = async () => {
   statsTab.classList.add("ag-tab-btn-active");
+  statsTab.setAttribute("aria-selected", "true");
   actionsTab.classList.remove("ag-tab-btn-active");
+  actionsTab.setAttribute("aria-selected", "false");
   actionsContent.style.display = "none";
   statsContent.style.display = "";
 
@@ -665,7 +669,7 @@ clearBtn.onclick = async () => {
 
 // ======= Export Tabs =======
 exportBtn.onclick = async (e) => {
-  e.preventDefault();
+  if (e) e.preventDefault();
   try {
     const result = await safeStorageOperation(
       () => chrome.storage.local.get(["savedTabs"]),
@@ -874,6 +878,20 @@ function closeSettings() {
 }
 settingsBtn.onclick = openSettings;
 closeSettingsBtn.onclick = closeSettings;
+
+// Close modal when clicking outside
+settingsModal.addEventListener("click", (e) => {
+  const dialogDimensions = settingsModal.getBoundingClientRect();
+  if (
+    e.clientX < dialogDimensions.left ||
+    e.clientX > dialogDimensions.right ||
+    e.clientY < dialogDimensions.top ||
+    e.clientY > dialogDimensions.bottom
+  ) {
+    closeSettings();
+  }
+});
+
 saveSettingsBtn.onclick = async () => {
   try {
     const theme = themeSelect.value;
