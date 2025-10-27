@@ -168,7 +168,7 @@
           <h3 class="ag-section-title">File Operations</h3>
           <div class="ag-file-actions">
             <button class="ag-list-item" id="importBtn">
-              <span class="material-icons ag-list-icon">file_upload</span>
+              <span class="ag-list-icon material-icons">file_upload</span>
               <span>Import Tabs</span>
             </button>
           </div>
@@ -179,11 +179,11 @@
           <h3 class="ag-section-title">Cloud Sync</h3>
           <div class="ag-sync-actions">
             <button class="ag-list-item" id="syncToDriveBtn">
-              <span class="material-icons ag-list-icon">cloud_upload</span>
+              <span class="ag-list-icon material-icons">cloud_upload</span>
               <span>Sync to Google Drive</span>
             </button>
             <button class="ag-list-item" id="restoreFromDriveBtn">
-              <span class="material-icons ag-list-icon">cloud_download</span>
+              <span class="ag-list-icon material-icons">cloud_download</span>
               <span>Restore from Google Drive</span>
             </button>
           </div>
@@ -284,6 +284,42 @@
             <option value="14px">Medium</option>
             <option value="16px">Large</option>
           </select>
+        </div>
+        
+        <div class="ag-form-divider"></div>
+        <h4 class="ag-form-section-title">Auto-Save Settings</h4>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label ag-checkbox-label">
+            <input type="checkbox" id="autoSaveEnabled" class="ag-checkbox" />
+            <span class="ag-checkbox-custom"></span>
+            <span>Enable Auto-Save</span>
+          </label>
+          <p class="ag-form-help">Automatically save tabs when idle</p>
+        </div>
+        
+        <div class="ag-form-group">
+          <label for="autoSaveIdleTime" class="ag-form-label">
+            <span class="material-icons">timer</span>
+            <span>Idle Time (seconds)</span>
+          </label>
+          <select id="autoSaveIdleTime" class="ag-select">
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="180">3 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="600">10 minutes</option>
+          </select>
+          <p class="ag-form-help">Time before auto-save triggers</p>
+        </div>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label ag-checkbox-label">
+            <input type="checkbox" id="autoSaveShowNotification" class="ag-checkbox" />
+            <span class="ag-checkbox-custom"></span>
+            <span>Show Notifications</span>
+          </label>
+          <p class="ag-form-help">Display notification when auto-save occurs</p>
         </div>
       </div>
       <div class="ag-dialog-footer">

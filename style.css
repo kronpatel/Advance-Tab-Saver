@@ -922,6 +922,21 @@ body {
   margin-bottom: 0;
 }
 
+.ag-form-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 24px 0;
+}
+
+.ag-form-section-title {
+  font-size: 0.9em;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
 .ag-form-label {
   display: flex;
   align-items: center;
@@ -935,6 +950,66 @@ body {
 .ag-form-label .material-icons {
   font-size: 18px;
   color: var(--accent-primary);
+}
+
+.ag-form-help {
+  font-size: 0.8em;
+  color: var(--text-secondary);
+  margin: 6px 0 0 0;
+  font-style: italic;
+}
+
+.ag-checkbox-label {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-left: 0;
+}
+
+.ag-checkbox {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.ag-checkbox-custom {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.ag-checkbox:checked ~ .ag-checkbox-custom {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.ag-checkbox-custom::after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--bg-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.ag-checkbox:checked ~ .ag-checkbox-custom::after {
+  display: block;
+}
+
+.ag-checkbox-label:hover .ag-checkbox-custom {
+  border-color: var(--accent-primary);
 }
 
 .ag-select {
