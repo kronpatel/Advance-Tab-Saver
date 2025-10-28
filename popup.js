@@ -874,14 +874,31 @@ async function openSettings() {
   // Load current settings
   try {
     const result = await safeStorageOperation(
-      () => chrome.storage.local.get(["theme", "font"]),
+      () =>
+        chrome.storage.local.get([
+          "theme",
+          "font",
+          "autoSaveEnabled",
+          "autoSaveIdleTime",
+          "autoSaveShowNotification",
+        ]),
       "loading settings"
     );
 
     if (result.success) {
-      const { theme = "dark", font = "14px" } = result.data;
+      const {
+        theme = "dark",
+        font = "14px",
+        autoSaveEnabled = false,
+        autoSaveIdleTime = 120,
+        autoSaveShowNotification = true,
+      } = result.data;
       themeSelect.value = theme;
       fontSelect.value = font;
+      document.getElementById("autoSaveEnabled").checked = autoSaveEnabled;
+      document.getElementById("autoSaveIdleTime").value = autoSaveIdleTime;
+      document.getElementById("autoSaveShowNotification").checked =
+        autoSaveShowNotification;
     }
   } catch (error) {
     console.error("Error loading settings:", error);
@@ -912,24 +929,54 @@ saveSettingsBtn.onclick = async () => {
   try {
     const theme = themeSelect.value;
     const font = fontSelect.value;
+    const autoSaveEnabled = document.getElementById("autoSaveEnabled").checked;
+    const autoSaveIdleTime = parseInt(document.getElementById("autoSaveIdleTime").value, 10);
+    const autoSaveShowNotification = document.getElementById("autoSaveShowNotification").checked;
 
     // Validate settings
     const validThemes = ["dark", "light", "grey"];
     const validFonts = ["12px", "14px", "16px"];
+    const validIdleTimes = [60, 120, 180, 300, 600];
 
-    if (!validThemes.includes(theme) || !validFonts.includes(font)) {
+    if (
+      !validThemes.includes(theme) ||
+      !validFonts.includes(font) ||
+      !validIdleTimes.includes(autoSaveIdleTime)
+    ) {
       showMessage("Invalid settings values", "warning");
       return;
     }
 
     const result = await safeStorageOperation(
-      () => chrome.storage.local.set({ theme, font }),
+      () =>
+        chrome.storage.local.set({
+          theme,
+          font,
+          autoSaveEnabled,
+          autoSaveIdleTime,
+          autoSaveShowNotification,
+        }),
       "saving settings"
     );
 
     if (result.success) {
       // Apply settings immediately
       applySettings(theme, font);
+
+      // Notify background script about auto-save settings
+      try {
+        await chrome.runtime.sendMessage({
+          action: "updateAutoSaveSettings",
+          settings: {
+            autoSaveEnabled,
+            autoSaveIdleTime,
+            autoSaveShowNotification,
+          },
+        });
+      } catch (error) {
+        console.error("Error updating auto-save settings:", error);
+      }
+
       closeSettings();
       showMessage("Settings saved!", "success");
     }
