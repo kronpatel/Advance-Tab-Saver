@@ -2,6 +2,10 @@
 
 **Advance Tab Saver** is a lightweight and efficient Chrome extension that helps you save, organize, and restore your browser tabs easily. It’s designed to boost productivity by preventing tab clutter and letting you quickly reopen saved sessions with just one click.
 
+[![GitHub Release](https://img.shields.io/github/v/release/kronpatel/Advance-Tab-Saver?style=for-the-badge)](https://github.com/kronpatel/Advance-Tab-Saver/releases/latest)
+[![GitHub Stars](https://img.shields.io/github/stars/kronpatel/Advance-Tab-Saver?style=for-the-badge)](https://github.com/kronpatel/Advance-Tab-Saver/stargazers)
+
+
 ---
 
 ## 🚀 Features
