@@ -54,10 +54,10 @@ This extension helps you:
 ## 🔮 Future Improvements
 
 - [ ] Add the ability to name and categorize sessions.  
-- [ ] Sync sessions across devices.  
-- [ ] Export and import saved sessions (e.g., JSON format).  
-- [ ] Add dark mode and UI customization.  
-- [ ] Cross-browser support (Firefox, Edge).
+- [✅} Sync sessions across devices.  
+- [✅] Export and import saved sessions (e.g., JSON format).  
+- [✅] Add dark mode and UI customization.  
+- [✅] Cross-browser support (Firefox, Edge).
 
 ---
 
