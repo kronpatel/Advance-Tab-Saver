@@ -6,6 +6,12 @@
 [![GitHub Stars](https://img.shields.io/github/stars/kronpatel/Advance-Tab-Saver?style=for-the-badge)](https://github.com/kronpatel/Advance-Tab-Saver/stargazers)
 [![Coming Soon on Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Coming%20Soon-blue?logo=google-chrome&style=for-the-badge)](#)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+# Advance Tab Saver
+...
+See the [Changelog](./CHANGELOG.md) for release notes.
+
 
 ---
 
