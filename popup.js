@@ -21,6 +21,18 @@ const settingsModal = document.getElementById("settingsModal");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const closeSettingsBtn = document.getElementById("closeSettingsBtn");
 const messageBar = document.getElementById("messageBar");
+// Theme toggle
+const themeToggleBtn = document.getElementById("themeToggleBtn");
+const themeToggleIcon = document.getElementById("themeToggleIcon");
+// Category controls
+const categorySelect = document.getElementById("categorySelect");
+const customCategoryInput = document.getElementById("customCategoryInput");
+// Save Session Modal Elements (rehydrated on DOMContentLoaded)
+let sessionNameInput = document.querySelector("#sessionNameInput") || null;
+let saveSessionModal = document.querySelector("#saveSessionModal") || null;
+let confirmSaveBtn = document.querySelector("#confirmSaveBtn") || null;
+let cancelSaveBtn = document.querySelector("#cancelSaveBtn") || null;
+let sessionNameError = document.querySelector("#sessionNameError") || null;
 
 // Google Sign-In
 const googleSignInBtn = document.getElementById("googleSignInBtn");
@@ -135,6 +147,7 @@ function sanitizeTabData(tab) {
     url: String(tab.url || "").slice(0, 2048),
     favicon: favicon || DEFAULT_FAVICON,
     savedAt: Date.now(),
+    category: tab.category ? String(tab.category).slice(0, 100) : undefined,
   };
 
   const isValid = isValidTab(sanitized);
@@ -355,6 +368,7 @@ async function loadTabs() {
 
     // Apply theme and font settings
     applySettings(theme, font);
+    updateThemeToggleIcon(theme);
 
     // Validate and clean data
     const validatedTabs = await validateStorageData();
@@ -428,7 +442,20 @@ saveCurrentBtn.onclick = async () => {
       return;
     }
 
-    const sanitizedTab = sanitizeTabData(tab);
+    // Determine category selection
+    let selectedCategory = undefined;
+    try {
+      if (categorySelect) {
+        if (categorySelect.value === "Custom") {
+          const customVal = (customCategoryInput?.value || "").trim();
+          if (customVal.length > 0) selectedCategory = customVal;
+        } else {
+          selectedCategory = categorySelect.value;
+        }
+      }
+    } catch (e) {}
+
+    const sanitizedTab = sanitizeTabData({ ...tab, category: selectedCategory });
     if (!sanitizedTab) {
       console.log("Failed to sanitize tab:", tab);
       // More specific error message
@@ -489,90 +516,165 @@ saveCurrentBtn.onclick = async () => {
 };
 
 // ======= Save All Tabs =======
-saveAllBtn.onclick = async () => {
+// Open modal for naming session instead of immediate save
+saveAllBtn.addEventListener("click", () => {
+  if (!sessionNameInput || !saveSessionModal || !confirmSaveBtn) {
+    console.error("⚠️ Save modal missing — UI not linked correctly.");
+    return;
+  }
+  const now = new Date();
+  sessionNameInput.value = `Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  confirmSaveBtn.disabled = false;
+  sessionNameError && sessionNameError.classList.add("hidden");
+  saveSessionModal.classList.remove("hidden");
+});
+
+// Attach/rehydrate modal handlers (idempotent)
+function setupSaveSessionModalHandlers() {
+  if (!saveSessionModal) return;
+
+  if (cancelSaveBtn && !cancelSaveBtn.dataset.bound) {
+    cancelSaveBtn.addEventListener("click", () => {
+      saveSessionModal.classList.add("hidden");
+    });
+    cancelSaveBtn.dataset.bound = "true";
+  }
+
+  if (sessionNameInput && !sessionNameInput.dataset.boundInput) {
+    sessionNameInput.addEventListener("input", () => {
+      if (!confirmSaveBtn || !sessionNameError) return;
+      if (sessionNameInput.value.trim().length === 0) {
+        confirmSaveBtn.disabled = true;
+        sessionNameError.classList.remove("hidden");
+      } else {
+        confirmSaveBtn.disabled = false;
+        sessionNameError.classList.add("hidden");
+      }
+    });
+    // Enter to save
+    sessionNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && confirmSaveBtn && !confirmSaveBtn.disabled) {
+        confirmSaveBtn.click();
+      }
+    });
+    sessionNameInput.dataset.boundInput = "true";
+  }
+
+  // backdrop click to close
+  if (!saveSessionModal.dataset.boundBackdrop) {
+    saveSessionModal.addEventListener("click", (e) => {
+      if (e.target === saveSessionModal) {
+        saveSessionModal.classList.add("hidden");
+      }
+    });
+    saveSessionModal.dataset.boundBackdrop = "true";
+  }
+
+  if (confirmSaveBtn && !confirmSaveBtn.dataset.boundConfirm) {
+    confirmSaveBtn.addEventListener("click", async () => {
+      const name = (sessionNameInput?.value || "").trim();
+      if (!name) return;
+
+      chrome.tabs.query({ currentWindow: true }, async (tabs) => {
+        const session = {
+          id: Date.now(),
+          name,
+          tabs,
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+          savedSessions.push(session);
+          await chrome.storage.local.set({ savedSessions });
+          saveSessionModal.classList.add("hidden");
+          if (typeof loadSessions === "function") {
+            try { await loadSessions(); } catch (e) {}
+          }
+          showMessage("Session saved!", "success");
+        } catch (error) {
+          console.error("Error saving session:", error);
+          showMessage("Failed to save session.", "warning");
+        }
+      });
+    });
+    confirmSaveBtn.dataset.boundConfirm = "true";
+  }
+}
+
+// ======= Sessions UI =======
+async function loadSessions() {
   try {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    if (!tabs || tabs.length === 0) {
-      showMessage("No tabs found to save", "warning");
+    const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+    const list = document.getElementById("sessionsList");
+    if (!list) return;
+
+    list.innerHTML = "";
+
+    if (!savedSessions || savedSessions.length === 0) {
+      list.innerHTML = "<p>No saved sessions yet.</p>";
       return;
     }
 
-    const result = await safeStorageOperation(
-      () => chrome.storage.local.get(["savedTabs"]),
-      "loading existing saved tabs"
-    );
+    savedSessions.forEach((session) => {
+      const div = document.createElement("div");
+      div.className = "session-item";
 
-    if (!result.success) return;
+      const date = new Date(session.createdAt).toLocaleDateString();
+      const tabCount = (session.tabs || []).length;
 
-    const { savedTabs = [] } = result.data;
+      div.innerHTML = `
+        <div class="session-info">
+          <div class="session-name">${session.name}</div>
+          <div class="session-meta">Saved: ${date} — ${tabCount} tabs</div>
+        </div>
+        <div class="session-actions">
+          <button class="btn restore" data-id="${session.id}">Restore</button>
+          <button class="btn delete" data-id="${session.id}">Delete</button>
+        </div>
+      `;
 
-    let added = 0,
-      skipped = 0,
-      invalid = 0;
-    const newTabs = [...savedTabs];
+      list.appendChild(div);
+    });
 
-    for (const tab of tabs) {
-      const sanitizedTab = sanitizeTabData(tab);
-
-      if (!sanitizedTab) {
-        invalid++;
-        continue;
-      }
-
-      if (newTabs.find((t) => t.url === sanitizedTab.url)) {
-        skipped++;
-      } else {
-        // Check total limit
-        if (newTabs.length >= MAX_SAVED_TABS) {
-          showMessage(
-            `Stopped at ${MAX_SAVED_TABS} tabs limit. ${added} saved, ${
-              tabs.length - added - skipped - invalid
-            } remaining.`,
-            "warning",
-            5000
-          );
-          break;
-        }
-        newTabs.push(sanitizedTab);
-        added++;
-      }
-    }
-
-    if (added > 0) {
-      const saveResult = await safeStorageOperation(
-        () => chrome.storage.local.set({ savedTabs: newTabs }),
-        "saving all tabs"
-      );
-
-      if (saveResult.success) {
-        loadTabs();
-      }
-    }
-
-    // User feedback
-    if (added && skipped && invalid) {
-      showMessage(
-        `${added} saved, ${skipped} duplicates skipped, ${invalid} invalid tabs ignored.`,
-        "info",
-        4000
-      );
-    } else if (added && skipped) {
-      showMessage(
-        `${added} tab(s) saved, ${skipped} duplicate(s) skipped.`,
-        "info"
-      );
-    } else if (added) {
-      showMessage(`All ${added} tabs saved!`, "success");
-    } else if (skipped && !invalid) {
-      showMessage("All tabs are already saved!", "warning");
-    } else if (invalid) {
-      showMessage(`${invalid} invalid tabs could not be saved.`, "warning");
-    }
+    attachSessionButtons();
   } catch (error) {
-    console.error("Error saving all tabs:", error);
-    showMessage("Failed to save tabs. Please try again.", "warning");
+    console.error("Error loading sessions:", error);
   }
-};
+}
+
+function attachSessionButtons() {
+  document.querySelectorAll(".btn.restore").forEach((btn) => {
+    btn.addEventListener("click", () => restoreSession(btn.dataset.id));
+  });
+
+  document.querySelectorAll(".btn.delete").forEach((btn) => {
+    btn.addEventListener("click", () => deleteSession(btn.dataset.id));
+  });
+}
+
+async function restoreSession(id) {
+  const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+  const session = savedSessions.find((s) => s.id == id);
+  if (!session) return;
+
+  (session.tabs || []).forEach((tab) => {
+    if (tab && tab.url) {
+      chrome.tabs.create({ url: tab.url });
+    }
+  });
+}
+
+async function deleteSession(id) {
+  const confirmDelete = confirm("Delete this session permanently?");
+  if (!confirmDelete) return;
+
+  const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+  const updated = savedSessions.filter((s) => s.id != id);
+  await chrome.storage.local.set({ savedSessions: updated });
+
+  await loadSessions();
+}
 
 // ======= Open All Tabs =======
 openAllBtn.onclick = async () => {
@@ -685,14 +787,12 @@ exportBtn.onclick = async (e) => {
 
     const validTabs = savedTabs.filter(isValidTab);
 
-    const exportText = validTabs
-      .map((t) => `${t.title}\n${t.url}`)
-      .join("\n\n");
-    const blob = new Blob([exportText], { type: "text/plain" });
+    const jsonData = JSON.stringify(validTabs, null, 2);
+    const blob = new Blob([jsonData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
     const timestamp = new Date().toISOString().slice(0, 10);
-    const filename = `tab-saver-export-${timestamp}.txt`;
+    const filename = `tab-saver-export-${timestamp}.json`;
 
     await chrome.downloads.download({ url, filename });
 
@@ -962,6 +1062,7 @@ saveSettingsBtn.onclick = async () => {
     if (result.success) {
       // Apply settings immediately
       applySettings(theme, font);
+      updateThemeToggleIcon(theme);
 
       // Notify background script about auto-save settings
       try {
@@ -992,8 +1093,59 @@ function applySettings(theme, font) {
   document.documentElement.setAttribute("data-font-size", font);
 }
 
+function updateThemeToggleIcon(theme) {
+  if (!themeToggleIcon) return;
+  if (theme === "light") {
+    themeToggleIcon.textContent = "light_mode";
+  } else {
+    themeToggleIcon.textContent = "dark_mode";
+  }
+}
+
+// Theme toggle button
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener("click", async () => {
+    try {
+      const { theme = "dark", font = "14px" } = await chrome.storage.local.get([
+        "theme",
+        "font",
+      ]);
+      const nextTheme = theme === "light" ? "dark" : "light";
+      await chrome.storage.local.set({ theme: nextTheme });
+      applySettings(nextTheme, font);
+      updateThemeToggleIcon(nextTheme);
+      showMessage(`Theme set to ${nextTheme}`, "success");
+    } catch (e) {
+      console.error("Error toggling theme", e);
+    }
+  });
+}
+
+// Category UI behavior
+if (categorySelect) {
+  const syncCategoryUI = () => {
+    if (categorySelect.value === "Custom") {
+      customCategoryInput?.classList.remove("hidden");
+      customCategoryInput?.focus();
+    } else {
+      customCategoryInput?.classList.add("hidden");
+    }
+  };
+  categorySelect.addEventListener("change", syncCategoryUI);
+  try { syncCategoryUI(); } catch (e) {}
+}
+
 // ======= Initial Load =======
 document.addEventListener("DOMContentLoaded", async () => {
+  // Rehydrate modal references after full DOM is available
+  sessionNameInput = document.querySelector("#sessionNameInput") || null;
+  saveSessionModal = document.querySelector("#saveSessionModal") || null;
+  confirmSaveBtn = document.querySelector("#confirmSaveBtn") || null;
+  cancelSaveBtn = document.querySelector("#cancelSaveBtn") || null;
+  sessionNameError = document.querySelector("#sessionNameError") || null;
+  // Ensure modal event handlers are bound after rehydration
+  try { setupSaveSessionModalHandlers(); } catch (e) {}
+
   if (!validateDOMElements()) {
     console.error(
       "Critical DOM elements missing. Extension may not work properly."
@@ -1005,6 +1157,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   await restoreGoogleAuthState();
 
   loadTabs();
+  // Also load saved sessions UI
+  try { await loadSessions(); } catch (e) {}
+  try { validateUI && validateUI(); } catch (e) {}
 });
 
 // ======= GOOGLE SIGN-IN & DRIVE SYNC (chrome.identity) =======
@@ -1436,3 +1591,24 @@ restoreFromDriveBtn.onclick = async () => {
     }
   }
 };
+
+// ======= UI Self-check =======
+function validateUI() {
+  const required = {
+    sessionNameInput,
+    saveSessionModal,
+    confirmSaveBtn,
+    cancelSaveBtn,
+    sessionNameError,
+  };
+  Object.entries(required).forEach(([key, val]) => {
+    if (!val) console.warn(`⚠️ Missing element in popup.html: ${key}`);
+  });
+}
+
+// Avoid early false warnings before DOM is ready
+try {
+  if (document.readyState === "complete") {
+    validateUI();
+  }
+} catch (e) {}

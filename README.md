@@ -45,6 +45,25 @@ See the [Changelog](./CHANGELOG.md) for release notes.
 
 ---
 
+## 💾 Storage Format
+
+```js
+// OLD:
+// { id, tabs }
+
+// NEW session object stored in chrome.storage.local.savedSessions:
+{
+  id: Number,
+  name: String,
+  tabs: Array,
+  createdAt: ISOString
+}
+```
+
+No migration is needed; existing users without `name` will continue to work. The UI may be updated in a subsequent step to list sessions by name.
+
+---
+
 ## 🎯 Why Use Advance-Tab-Saver?
 
 Managing too many open tabs can be frustrating.  

@@ -11,6 +11,7 @@
     />
   </head>
   <body>
+    <h2 style="margin:0 0 10px 0; font-size:17px; font-weight:600;">📂 Advance Tab Saver</h2>
     <main class="ag-main-card">
       <!-- Header Section -->
       <header class="ag-header">
@@ -22,14 +23,24 @@
           />
           <h1 class="ag-title">TAB SAVER PRO</h1>
         </div>
-        <button
-          class="ag-settings-btn"
-          id="settingsBtn"
-          title="Settings"
-          aria-label="Open settings"
-        >
-          <span class="material-icons">settings</span>
-        </button>
+        <div class="ag-header-actions">
+          <button
+            class="ag-theme-toggle-btn"
+            id="themeToggleBtn"
+            title="Toggle theme"
+            aria-label="Toggle theme"
+          >
+            <span id="themeToggleIcon" class="material-icons">dark_mode</span>
+          </button>
+          <button
+            class="ag-settings-btn"
+            id="settingsBtn"
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <span class="material-icons">settings</span>
+          </button>
+        </div>
       </header>
 
       <!-- Message Bar -->
@@ -121,8 +132,31 @@
         aria-labelledby="actionsTab"
       >
         <!-- Quick Actions -->
-        <section class="ag-actions-section">
+        <div class="section">
+          <section class="ag-actions-section">
           <h3 class="ag-section-title">Quick Actions</h3>
+          <div class="ag-category-row" aria-label="Category selection">
+            <label for="categorySelect" class="ag-form-label">
+              <span class="material-icons">category</span>
+              <span>Category</span>
+            </label>
+            <div class="ag-category-controls">
+              <select id="categorySelect" class="ag-select">
+                <option value="Work">Work</option>
+                <option value="Project">Project</option>
+                <option value="Study">Study</option>
+                <option value="Personal">Personal</option>
+                <option value="Custom">Custom…</option>
+              </select>
+              <input
+                id="customCategoryInput"
+                class="ag-input hidden"
+                type="text"
+                placeholder="Enter custom category"
+                aria-label="Custom category"
+              />
+            </div>
+          </div>
           <div class="ag-actions-grid">
             <button class="ag-action-card" id="saveCurrentBtn">
               <div class="ag-action-icon">
@@ -161,10 +195,12 @@
               </div>
             </button>
           </div>
-        </section>
+          </section>
+        </div>
 
         <!-- File Operations -->
-        <section class="ag-file-section">
+        <div class="section">
+          <section class="ag-file-section">
           <h3 class="ag-section-title">File Operations</h3>
           <div class="ag-file-actions">
             <button class="ag-list-item" id="importBtn">
@@ -172,10 +208,12 @@
               <span>Import Tabs</span>
             </button>
           </div>
-        </section>
+          </section>
+        </div>
 
         <!-- Cloud Sync -->
-        <section class="ag-sync-section">
+        <div class="section">
+          <section class="ag-sync-section">
           <h3 class="ag-section-title">Cloud Sync</h3>
           <div class="ag-sync-actions">
             <button class="ag-list-item" id="syncToDriveBtn">
@@ -187,10 +225,12 @@
               <span>Restore from Google Drive</span>
             </button>
           </div>
-        </section>
+          </section>
+        </div>
 
         <!-- Search & Tab List -->
-        <section class="ag-tabs-section">
+        <div class="section">
+          <section class="ag-tabs-section">
           <h3 class="ag-section-title">Saved Tabs</h3>
           <div class="ag-search-container">
             <span class="material-icons ag-search-icon">search</span>
@@ -203,7 +243,16 @@
             />
           </div>
           <div id="tabList" class="ag-tab-list"></div>
-        </section>
+          </section>
+        </div>
+
+        <!-- Saved Sessions List -->
+        <div class="section">
+          <section class="ag-tabs-section">
+          <h3 class="ag-section-title">Saved Sessions</h3>
+          <div id="sessionsList"></div>
+          </section>
+        </div>
       </div>
 
       <!-- Statistics Tab Content -->
@@ -332,5 +381,18 @@
 
     <script src="config.js"></script>
     <script src="popup.js"></script>
+    
+    <!-- Save Session Modal -->
+    <div id="saveSessionModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Save current session</h2>
+        <input type="text" id="sessionNameInput" placeholder="Enter session name...">
+        <p id="sessionNameError" class="error-text hidden">Please enter a name.</p>
+        <div class="modal-actions">
+          <button id="cancelSaveBtn" class="btn cancel">Cancel</button>
+          <button id="confirmSaveBtn" class="btn save" disabled>Save Session</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
