@@ -364,3 +364,54 @@ async function updateAutoSaveSettings(settings) {
 
 // Initialize auto-save on service worker startup
 initializeAutoSave();
+
+// ======= Local + Sync Hybrid for savedTabs =======
+async function reconcileLocalAndSync() {
+  try {
+    const local = await chrome.storage.local.get(["savedTabs"]);
+    const syncRaw = await chrome.storage.sync.get(["savedTabs"]);
+
+    let localTabs = Array.isArray(local.savedTabs) ? local.savedTabs : [];
+    let syncTabs = [];
+
+    if (typeof syncRaw.savedTabs === "string") {
+      try {
+        const parsed = JSON.parse(syncRaw.savedTabs);
+        if (Array.isArray(parsed)) {
+          syncTabs = parsed;
+        }
+      } catch (_) {
+        // ignore malformed sync data
+      }
+    }
+
+    if (syncTabs.length > (localTabs?.length || 0)) {
+      await chrome.storage.local.set({ savedTabs: syncTabs });
+    } else if ((localTabs?.length || 0) > syncTabs.length) {
+      await chrome.storage.sync.set({ savedTabs: JSON.stringify(localTabs) });
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error reconciling local/sync:", error);
+  }
+}
+
+// Compare on startup and keep sync updated when local changes
+chrome.runtime.onStartup.addListener(() => {
+  reconcileLocalAndSync();
+});
+
+// Also reconcile when the service worker starts (cold start)
+reconcileLocalAndSync();
+
+// Auto-sync whenever local savedTabs changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  try {
+    if (area === "local" && Object.prototype.hasOwnProperty.call(changes, "savedTabs")) {
+      const newValue = changes.savedTabs?.newValue;
+      const payload = Array.isArray(newValue) ? JSON.stringify(newValue) : JSON.stringify([]);
+      chrome.storage.sync.set({ savedTabs: payload });
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error syncing to chrome.storage.sync:", error);
+  }
+});
