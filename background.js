@@ -21,7 +21,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         autoSaveEnabled: false,
         autoSaveIdleTime: 120,
         autoSaveShowNotification: true,
-        chromeSyncEnabled: false,
       });
       console.log("Tab Saver Pro: Initial storage setup complete");
     } else if (details.reason === "update") {
@@ -38,7 +37,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         "autoSaveEnabled",
         "autoSaveIdleTime",
         "autoSaveShowNotification",
-        "chromeSyncEnabled",
       ]);
 
       // Set defaults for missing values
@@ -61,9 +59,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       if (result.autoSaveShowNotification === undefined) {
         updates.autoSaveShowNotification = true;
       }
-      if (result.chromeSyncEnabled === undefined) {
-        updates.chromeSyncEnabled = false;
-      }
 
       if (Object.keys(updates).length > 0) {
         await chrome.storage.local.set(updates);
@@ -82,7 +77,6 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         autoSaveEnabled: false,
         autoSaveIdleTime: 120,
         autoSaveShowNotification: true,
-        chromeSyncEnabled: false,
       });
       console.log("Tab Saver Pro: Fallback storage setup complete");
     } catch (fallbackError) {
@@ -253,9 +247,8 @@ async function performAutoSave() {
     }
 
     // Get existing saved tabs
-    const storage = await getStorage();
-    const result = await storage.get(["savedTabs"]);
-    let savedTabs = result.savedTabs || [];
+    const result = await chrome.storage.local.get(["savedTabs"]);
+    const savedTabs = result.savedTabs || [];
 
     let added = 0;
     const newTabs = [...savedTabs];
@@ -271,7 +264,7 @@ async function performAutoSave() {
 
     // Save if we added any new tabs
     if (added > 0) {
-      await storage.set({ savedTabs: newTabs });
+      await chrome.storage.local.set({ savedTabs: newTabs });
       lastAutoSaveTime = now;
 
       console.log(`Tab Saver Pro: Auto-saved ${added} new tab(s)`);

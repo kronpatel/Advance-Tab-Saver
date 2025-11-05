@@ -20,6 +20,6 @@
     }
   },
   "background": {
-    "service_worker": ["storage.js", "background.js"]
+    "service_worker": "background.js"
   }
 }

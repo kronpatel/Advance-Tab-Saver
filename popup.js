@@ -35,7 +35,6 @@ const restoreFromDriveBtn = document.getElementById("restoreFromDriveBtn");
 const actionsTab = document.getElementById("actionsTab");
 const statsTab = document.getElementById("statsTab");
 const actionsContent = document.getElementById("actionsContent");
-const syncStatusIcon = document.getElementById("syncStatusIcon");
 const statsContent = document.getElementById("statsContent");
 
 // ======= DOM Validation =======
@@ -175,11 +174,10 @@ async function safeStorageOperation(operation, errorContext) {
 
 async function validateStorageData() {
   try {
-    const storage = await getStorage();
-    const { savedTabs = [] } = await storage.get(["savedTabs"]);
+    const { savedTabs = [] } = await chrome.storage.local.get(["savedTabs"]);
 
     if (!Array.isArray(savedTabs)) {
-      await storage.set({ savedTabs: [] });
+      await chrome.storage.local.set({ savedTabs: [] });
       return [];
     }
 
@@ -188,7 +186,7 @@ async function validateStorageData() {
     });
 
     if (validTabs.length !== savedTabs.length) {
-      await storage.set({ savedTabs: validTabs });
+      await chrome.storage.local.set({ savedTabs: validTabs });
     }
 
     return validTabs;
@@ -220,9 +218,8 @@ statsTab.onclick = async () => {
   statsContent.style.display = "";
 
   try {
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading statistics"
     );
 
@@ -344,26 +341,17 @@ function renderTabs(tabs) {
 // ======= Load Tabs =======
 async function loadTabs() {
   try {
-    // Settings are always in local storage
     const result = await safeStorageOperation(
-      () => chrome.storage.local.get(["theme", "font", "chromeSyncEnabled"]),
+      () => chrome.storage.local.get(["savedTabs", "theme", "font"]),
       "loading tabs"
     );
 
     if (!result.success) {
       renderTabs([]);
-      updateSyncStatus(false);
       return;
     }
 
-    const {
-      theme = "dark",
-      font = "14px",
-      chromeSyncEnabled = false,
-    } = result.data;
-
-    // Update the sync status icon in the UI
-    updateSyncStatus(chromeSyncEnabled);
+    const { savedTabs, theme = "dark", font = "14px" } = result.data;
 
     // Apply theme and font settings
     applySettings(theme, font);
@@ -392,9 +380,8 @@ tabList.addEventListener("click", async (e) => {
     } else if (e.target.closest(".delete")) {
       const url = e.target.closest(".delete").dataset.url;
 
-      const storage = await getStorage();
       const result = await safeStorageOperation(
-        () => storage.get(["savedTabs"]),
+        () => chrome.storage.local.get(["savedTabs"]),
         "loading tabs for deletion"
       );
 
@@ -404,7 +391,7 @@ tabList.addEventListener("click", async (e) => {
       const filtered = savedTabs.filter((t) => t.url !== url);
 
       const saveResult = await safeStorageOperation(
-        () => storage.set({ savedTabs: filtered }),
+        () => chrome.storage.local.set({ savedTabs: filtered }),
         "deleting tab"
       );
 
@@ -460,9 +447,8 @@ saveCurrentBtn.onclick = async () => {
       return;
     }
 
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs to check duplicates"
     );
 
@@ -487,9 +473,8 @@ saveCurrentBtn.onclick = async () => {
 
     savedTabs.push(sanitizedTab);
 
-    const storageForSave = await getStorage();
     const saveResult = await safeStorageOperation(
-      () => storageForSave.set({ savedTabs }),
+      () => chrome.storage.local.set({ savedTabs }),
       "saving current tab"
     );
 
@@ -512,9 +497,8 @@ saveAllBtn.onclick = async () => {
       return;
     }
 
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading existing saved tabs"
     );
 
@@ -555,9 +539,8 @@ saveAllBtn.onclick = async () => {
     }
 
     if (added > 0) {
-      const storageForSave = await getStorage();
       const saveResult = await safeStorageOperation(
-        () => storageForSave.set({ savedTabs: newTabs }),
+        () => chrome.storage.local.set({ savedTabs: newTabs }),
         "saving all tabs"
       );
 
@@ -594,9 +577,8 @@ saveAllBtn.onclick = async () => {
 // ======= Open All Tabs =======
 openAllBtn.onclick = async () => {
   try {
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs to open"
     );
 
@@ -648,9 +630,8 @@ openAllBtn.onclick = async () => {
 // ======= Clear All Tabs =======
 clearBtn.onclick = async () => {
   try {
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs count"
     );
 
@@ -669,9 +650,8 @@ clearBtn.onclick = async () => {
     );
     if (!confirmed) return;
 
-    const storageForDelete = await getStorage();
     const deleteResult = await safeStorageOperation(
-      () => storageForDelete.remove("savedTabs"),
+      () => chrome.storage.local.remove("savedTabs"),
       "clearing all tabs"
     );
 
@@ -689,9 +669,8 @@ clearBtn.onclick = async () => {
 exportBtn.onclick = async (e) => {
   if (e) e.preventDefault();
   try {
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs for export"
     );
 
@@ -781,9 +760,8 @@ importBtn.onclick = () => {
         return;
       }
 
-      const storage = await getStorage();
       const result = await safeStorageOperation(
-        () => storage.get(["savedTabs"]),
+        () => chrome.storage.local.get(["savedTabs"]),
         "loading existing tabs for import"
       );
 
@@ -814,9 +792,8 @@ importBtn.onclick = () => {
         finalTabs.splice(MAX_SAVED_TABS);
       }
 
-      const storageForSave = await getStorage();
       const saveResult = await safeStorageOperation(
-        () => storageForSave.set({ savedTabs: finalTabs }),
+        () => chrome.storage.local.set({ savedTabs: finalTabs }),
         "saving imported tabs"
       );
 
@@ -845,9 +822,8 @@ importBtn.onclick = () => {
 // ======= Search =======
 searchInput.oninput = async () => {
   try {
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs for search"
     );
 
@@ -905,7 +881,6 @@ async function openSettings() {
           "autoSaveEnabled",
           "autoSaveIdleTime",
           "autoSaveShowNotification",
-          "chromeSyncEnabled",
         ]),
       "loading settings"
     );
@@ -917,7 +892,6 @@ async function openSettings() {
         autoSaveEnabled = false,
         autoSaveIdleTime = 120,
         autoSaveShowNotification = true,
-        chromeSyncEnabled = false,
       } = result.data;
       themeSelect.value = theme;
       fontSelect.value = font;
@@ -925,7 +899,6 @@ async function openSettings() {
       document.getElementById("autoSaveIdleTime").value = autoSaveIdleTime;
       document.getElementById("autoSaveShowNotification").checked =
         autoSaveShowNotification;
-      document.getElementById("chromeSyncEnabled").checked = chromeSyncEnabled;
     }
   } catch (error) {
     console.error("Error loading settings:", error);
@@ -958,7 +931,6 @@ saveSettingsBtn.onclick = async () => {
     const font = fontSelect.value;
     const autoSaveEnabled = document.getElementById("autoSaveEnabled").checked;
     const autoSaveIdleTime = parseInt(document.getElementById("autoSaveIdleTime").value, 10);
-    const chromeSyncEnabled = document.getElementById("chromeSyncEnabled").checked;
     const autoSaveShowNotification = document.getElementById("autoSaveShowNotification").checked;
 
     // Validate settings
@@ -975,19 +947,6 @@ saveSettingsBtn.onclick = async () => {
       return;
     }
 
-    // --- Data Migration Logic ---
-    const oldSettings = await chrome.storage.local.get("chromeSyncEnabled");
-    const wasSyncEnabled = oldSettings.chromeSyncEnabled || false;
-
-    if (chromeSyncEnabled !== wasSyncEnabled) {
-      const confirmed = confirm(
-        `This will move your tabs to ${chromeSyncEnabled ? "Chrome Sync" : "Local Storage"}. Continue?`
-      );
-      if (!confirmed) return;
-      await migrateStorage(chromeSyncEnabled);
-    }
-    // --- End Migration Logic ---
-
     const result = await safeStorageOperation(
       () =>
         chrome.storage.local.set({
@@ -996,7 +955,6 @@ saveSettingsBtn.onclick = async () => {
           autoSaveEnabled,
           autoSaveIdleTime,
           autoSaveShowNotification,
-          chromeSyncEnabled,
         }),
       "saving settings"
     );
@@ -1004,7 +962,6 @@ saveSettingsBtn.onclick = async () => {
     if (result.success) {
       // Apply settings immediately
       applySettings(theme, font);
-      updateSyncStatus(chromeSyncEnabled);
 
       // Notify background script about auto-save settings
       try {
@@ -1021,7 +978,6 @@ saveSettingsBtn.onclick = async () => {
       }
 
       closeSettings();
-      await loadTabs(); // Reload tabs from the new storage location
       showMessage("Settings saved!", "success");
     }
   } catch (error) {
@@ -1030,54 +986,10 @@ saveSettingsBtn.onclick = async () => {
   }
 };
 
-// Handle storage migration between local and sync
-async function migrateStorage(isEnablingSync) {
-  const sourceStorage = isEnablingSync ? chrome.storage.local : chrome.storage.sync;
-  const destStorage = isEnablingSync ? chrome.storage.sync : chrome.storage.local;
-
-  try {
-    showMessage("Migrating tabs...", "info");
-    const { savedTabs = [] } = await sourceStorage.get("savedTabs");
-
-    // Check for quota on sync storage
-    if (isEnablingSync) {
-      const bytes = new TextEncoder().encode(JSON.stringify(savedTabs)).length;
-      if (bytes > chrome.storage.sync.QUOTA_BYTES - 5000) { // Leave some buffer
-        showMessage("Cannot enable sync: Tab data is too large for Chrome Sync.", "warning", 5000);
-        throw new Error("Data too large for sync storage");
-      }
-    }
-
-    await destStorage.set({ savedTabs });
-    await sourceStorage.remove("savedTabs"); // Clean up old location
-    showMessage("Tabs migrated successfully!", "success");
-  } catch (error) {
-    console.error("Storage migration failed:", error);
-    showMessage("Tab migration failed. Please try again.", "warning");
-    // Revert the setting change on failure
-    await chrome.storage.local.set({ chromeSyncEnabled: !isEnablingSync });
-    throw error; // Propagate error to stop saveSettings
-  }
-}
-
 // Apply theme and font settings
 function applySettings(theme, font) {
   document.documentElement.setAttribute("data-theme", theme);
   document.documentElement.setAttribute("data-font-size", font);
-}
-
-// Update the sync status icon
-function updateSyncStatus(isSyncEnabled) {
-  if (!syncStatusIcon) return;
-  if (isSyncEnabled) {
-    syncStatusIcon.textContent = "cloud_sync";
-    syncStatusIcon.title = "Tabs are synced across your devices.";
-    syncStatusIcon.classList.add("synced");
-  } else {
-    syncStatusIcon.textContent = "computer";
-    syncStatusIcon.title = "Tabs are stored locally on this device.";
-    syncStatusIcon.classList.remove("synced");
-  }
 }
 
 // ======= Initial Load =======
@@ -1271,9 +1183,8 @@ syncToDriveBtn.onclick = async () => {
 
     showMessage("Syncing to Google Drive...", "info");
 
-    const storage = await getStorage();
     const result = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "loading tabs for sync"
     );
 
@@ -1458,9 +1369,8 @@ restoreFromDriveBtn.onclick = async () => {
     }
 
     // Ask user for confirmation if there are existing tabs
-    const storage = await getStorage();
     const currentResult = await safeStorageOperation(
-      () => storage.get(["savedTabs"]),
+      () => chrome.storage.local.get(["savedTabs"]),
       "checking existing tabs"
     );
 
@@ -1475,9 +1385,8 @@ restoreFromDriveBtn.onclick = async () => {
       if (!confirmed) return;
     }
 
-    const storageForSave = await getStorage();
     const saveResult = await safeStorageOperation(
-      () => storageForSave.set({ savedTabs: validTabs }),
+      () => chrome.storage.local.set({ savedTabs: validTabs }),
       "restoring tabs from backup"
     );
 

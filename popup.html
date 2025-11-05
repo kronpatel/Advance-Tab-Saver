@@ -68,9 +68,7 @@
         <div class="ag-status-header">
           <h2 class="ag-domain" id="currentDomain">Your Tabs</h2>
           <div class="ag-status-badge">
-            <span id="syncStatusIcon" class="material-icons ag-check-icon" title="Tabs are stored locally on this device.">
-              computer
-            </span>
+            <span class="material-icons ag-check-icon">check_circle</span>
           </div>
         </div>
         <div class="ag-status-stats">
@@ -323,18 +321,6 @@
           </label>
           <p class="ag-form-help">Display notification when auto-save occurs</p>
         </div>
-
-        <div class="ag-form-divider"></div>
-        <h4 class="ag-form-section-title">Sync Settings</h4>
-
-        <div class="ag-form-group">
-          <label class="ag-form-label ag-checkbox-label">
-            <input type="checkbox" id="chromeSyncEnabled" class="ag-checkbox" />
-            <span class="ag-checkbox-custom"></span>
-            <span>Enable Chrome Sync</span>
-          </label>
-          <p class="ag-form-help">Sync tabs across your devices using your Chrome account. This may have storage limits.</p>
-        </div>
       </div>
       <div class="ag-dialog-footer">
         <button id="saveSettingsBtn" class="ag-btn ag-btn-primary">
@@ -345,7 +331,6 @@
     </dialog>
 
     <script src="config.js"></script>
-    <script src="storage.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
