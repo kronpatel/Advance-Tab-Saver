@@ -275,6 +275,20 @@ function renderTabs(tabs) {
 
     const validTabs = tabs.filter(isValidTab);
 
+    // Show empty state if no tabs
+    if (validTabs.length === 0) {
+      tabList.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center; color: var(--text-secondary);">
+          <span class="material-icons" style="font-size: 48px; display: block; margin-bottom: 12px; opacity: 0.5;">inbox</span>
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">No tabs suspended</div>
+          <div style="font-size: 13px; opacity: 0.7;">Save your first tab to get started!</div>
+        </div>
+      `;
+      tabCount.textContent = "0";
+      if (totalTabs) totalTabs.textContent = "Total saved: 0";
+      return;
+    }
+
     const grouped = {};
     validTabs.forEach((tab) => {
       try {
@@ -389,8 +403,18 @@ tabList.addEventListener("click", async (e) => {
         showMessage("Invalid URL cannot be opened", "warning");
         return;
       }
-      await chrome.tabs.create({ url });
-      showMessage("Tab opened!", "success");
+      try {
+        await chrome.tabs.create({ url });
+        if (chrome.runtime.lastError) {
+          console.warn("Tab likely closed before action:", chrome.runtime.lastError.message);
+          showMessage("Failed to open tab. It may have been closed.", "warning");
+          return;
+        }
+        showMessage("Tab opened!", "success");
+      } catch (error) {
+        console.error("Error opening tab:", error);
+        showMessage("Failed to open tab. Please try again.", "warning");
+      }
     } else if (e.target.closest(".delete")) {
       const url = e.target.closest(".delete").dataset.url;
 
@@ -437,6 +461,11 @@ saveCurrentBtn.onclick = async () => {
       active: true,
       currentWindow: true,
     });
+    if (chrome.runtime.lastError) {
+      console.warn("Tab query error:", chrome.runtime.lastError.message);
+      showMessage("Failed to access current tab. Please try again.", "warning");
+      return;
+    }
     if (!tab) {
       showMessage("No active tab found", "warning");
       return;
@@ -576,6 +605,12 @@ function setupSaveSessionModalHandlers() {
       if (!name) return;
 
       chrome.tabs.query({ currentWindow: true }, async (tabs) => {
+        if (chrome.runtime.lastError) {
+          console.warn("Tab query error:", chrome.runtime.lastError.message);
+          showMessage("Failed to access tabs. Please try again.", "warning");
+          return;
+        }
+
         const session = {
           id: Date.now(),
           name,
@@ -584,14 +619,28 @@ function setupSaveSessionModalHandlers() {
         };
 
         try {
-          const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+          const result = await safeStorageOperation(
+            () => chrome.storage.local.get("savedSessions"),
+            "loading sessions"
+          );
+          
+          if (!result.success) return;
+
+          const { savedSessions = [] } = result.data;
           savedSessions.push(session);
-          await chrome.storage.local.set({ savedSessions });
-          saveSessionModal.classList.add("hidden");
-          if (typeof loadSessions === "function") {
-            try { await loadSessions(); } catch (e) {}
+          
+          const saveResult = await safeStorageOperation(
+            () => chrome.storage.local.set({ savedSessions }),
+            "saving session"
+          );
+
+          if (saveResult.success) {
+            saveSessionModal.classList.add("hidden");
+            if (typeof loadSessions === "function") {
+              try { await loadSessions(); } catch (e) {}
+            }
+            showMessage("Session saved!", "success");
           }
-          showMessage("Session saved!", "success");
         } catch (error) {
           console.error("Error saving session:", error);
           showMessage("Failed to save session.", "warning");
@@ -605,7 +654,18 @@ function setupSaveSessionModalHandlers() {
 // ======= Sessions UI =======
 async function loadSessions() {
   try {
-    const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get("savedSessions"),
+      "loading sessions"
+    );
+
+    if (!result.success) {
+      const list = document.getElementById("sessionsList");
+      if (list) list.innerHTML = "<p>Error loading sessions.</p>";
+      return;
+    }
+
+    const { savedSessions = [] } = result.data;
     const list = document.getElementById("sessionsList");
     if (!list) return;
 
@@ -654,26 +714,60 @@ function attachSessionButtons() {
 }
 
 async function restoreSession(id) {
-  const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
-  const session = savedSessions.find((s) => s.id == id);
-  if (!session) return;
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get("savedSessions"),
+      "loading sessions for restore"
+    );
 
-  (session.tabs || []).forEach((tab) => {
-    if (tab && tab.url) {
-      chrome.tabs.create({ url: tab.url });
-    }
-  });
+    if (!result.success) return;
+
+    const { savedSessions = [] } = result.data;
+    const session = savedSessions.find((s) => s.id == id);
+    if (!session) return;
+
+    (session.tabs || []).forEach((tab) => {
+      if (tab && tab.url) {
+        chrome.tabs.create({ url: tab.url }, (createdTab) => {
+          if (chrome.runtime.lastError) {
+            console.warn("Tab creation error:", chrome.runtime.lastError.message);
+          }
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Error restoring session:", error);
+    showMessage("Failed to restore session.", "warning");
+  }
 }
 
 async function deleteSession(id) {
   const confirmDelete = confirm("Delete this session permanently?");
   if (!confirmDelete) return;
 
-  const { savedSessions = [] } = await chrome.storage.local.get("savedSessions");
-  const updated = savedSessions.filter((s) => s.id != id);
-  await chrome.storage.local.set({ savedSessions: updated });
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get("savedSessions"),
+      "loading sessions for deletion"
+    );
 
-  await loadSessions();
+    if (!result.success) return;
+
+    const { savedSessions = [] } = result.data;
+    const updated = savedSessions.filter((s) => s.id != id);
+    
+    const saveResult = await safeStorageOperation(
+      () => chrome.storage.local.set({ savedSessions: updated }),
+      "deleting session"
+    );
+
+    if (saveResult.success) {
+      await loadSessions();
+    }
+  } catch (error) {
+    console.error("Error deleting session:", error);
+    showMessage("Failed to delete session.", "warning");
+  }
 }
 
 // ======= Open All Tabs =======
@@ -794,12 +888,17 @@ exportBtn.onclick = async (e) => {
     const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `tab-saver-export-${timestamp}.json`;
 
-    await chrome.downloads.download({ url, filename });
-
-    // Clean up blob URL
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-    showMessage(`${validTabs.length} tabs exported successfully!`, "success");
+    await chrome.downloads.download({ url, filename }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.warn("Download error:", chrome.runtime.lastError.message);
+        showMessage("Failed to export tabs. Please try again.", "warning");
+        URL.revokeObjectURL(url);
+        return;
+      }
+      // Clean up blob URL
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showMessage(`${validTabs.length} tabs exported successfully!`, "success");
+    });
   } catch (error) {
     console.error("Error exporting tabs:", error);
     showMessage("Failed to export tabs. Please try again.", "warning");
@@ -1106,17 +1205,29 @@ function updateThemeToggleIcon(theme) {
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener("click", async () => {
     try {
-      const { theme = "dark", font = "14px" } = await chrome.storage.local.get([
-        "theme",
-        "font",
-      ]);
+      const result = await safeStorageOperation(
+        () => chrome.storage.local.get(["theme", "font"]),
+        "loading theme settings"
+      );
+
+      if (!result.success) return;
+
+      const { theme = "dark", font = "14px" } = result.data;
       const nextTheme = theme === "light" ? "dark" : "light";
-      await chrome.storage.local.set({ theme: nextTheme });
-      applySettings(nextTheme, font);
-      updateThemeToggleIcon(nextTheme);
-      showMessage(`Theme set to ${nextTheme}`, "success");
+      
+      const saveResult = await safeStorageOperation(
+        () => chrome.storage.local.set({ theme: nextTheme }),
+        "saving theme"
+      );
+
+      if (saveResult.success) {
+        applySettings(nextTheme, font);
+        updateThemeToggleIcon(nextTheme);
+        showMessage(`Theme set to ${nextTheme}`, "success");
+      }
     } catch (e) {
       console.error("Error toggling theme", e);
+      showMessage("Failed to toggle theme. Please try again.", "warning");
     }
   });
 }
@@ -1175,22 +1286,28 @@ let accessToken = null;
 // Restore Google Auth state from storage
 async function restoreGoogleAuthState() {
   try {
-    const result = await chrome.storage.local.get([
-      "googleAuthToken",
-      "googleUserEmail",
-      "googleTokenExpiry",
-    ]);
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get([
+        "googleAuthToken",
+        "googleUserEmail",
+        "googleTokenExpiry",
+      ]),
+      "loading Google auth state"
+    );
 
+    if (!result.success) return;
+
+    const data = result.data;
     if (
-      result.googleAuthToken &&
-      result.googleUserEmail &&
-      result.googleTokenExpiry
+      data.googleAuthToken &&
+      data.googleUserEmail &&
+      data.googleTokenExpiry
     ) {
       // Check if token has expired
-      if (Date.now() < result.googleTokenExpiry) {
+      if (Date.now() < data.googleTokenExpiry) {
         // Token is still valid
-        accessToken = result.googleAuthToken;
-        userEmail = result.googleUserEmail;
+        accessToken = data.googleAuthToken;
+        userEmail = data.googleUserEmail;
 
         // Update UI to show signed-in state
         googleUserInfo.style.display = "block";
@@ -1202,15 +1319,26 @@ async function restoreGoogleAuthState() {
       } else {
         // Token has expired, clear it
         console.log("Stored auth token has expired");
-        await chrome.storage.local.remove([
-          "googleAuthToken",
-          "googleUserEmail",
-          "googleTokenExpiry",
-        ]);
+        await safeStorageOperation(
+          () => chrome.storage.local.remove([
+            "googleAuthToken",
+            "googleUserEmail",
+            "googleTokenExpiry",
+          ]),
+          "clearing expired auth token"
+        );
         // Also remove from Chrome's cache
         chrome.identity.getAuthToken({ interactive: false }, function (token) {
+          if (chrome.runtime.lastError) {
+            console.warn("Error getting auth token for cleanup:", chrome.runtime.lastError.message);
+            return;
+          }
           if (token) {
-            chrome.identity.removeCachedAuthToken({ token: token });
+            chrome.identity.removeCachedAuthToken({ token: token }, () => {
+              if (chrome.runtime.lastError) {
+                console.warn("Error removing cached auth token:", chrome.runtime.lastError.message);
+              }
+            });
           }
         });
       }
@@ -1304,19 +1432,49 @@ googleSignInBtn.onclick = async () => {
 
 googleSignOutBtn.onclick = () => {
   chrome.identity.getAuthToken({ interactive: false }, function (token) {
+    if (chrome.runtime.lastError) {
+      console.warn("Error getting auth token for sign out:", chrome.runtime.lastError.message);
+      // Continue with sign out even if token retrieval fails
+      accessToken = null;
+      userEmail = null;
+      chrome.storage.local.remove([
+        "googleAuthToken",
+        "googleUserEmail",
+        "googleTokenExpiry",
+      ], () => {
+        if (chrome.runtime.lastError) {
+          console.warn("Error clearing auth data:", chrome.runtime.lastError.message);
+        }
+        googleUserInfo.style.display = "none";
+        googleSignInBtn.style.display = "inline-block";
+        googleSignOutBtn.style.display = "none";
+        showMessage("Signed out!", "success");
+      });
+      return;
+    }
     if (token) {
       chrome.identity.removeCachedAuthToken(
         { token: token },
         async function () {
+          if (chrome.runtime.lastError) {
+            console.warn("Error removing cached auth token:", chrome.runtime.lastError.message);
+          }
           accessToken = null;
           userEmail = null;
 
           // Clear stored auth data
-          await chrome.storage.local.remove([
-            "googleAuthToken",
-            "googleUserEmail",
-            "googleTokenExpiry",
-          ]);
+          try {
+            await chrome.storage.local.remove([
+              "googleAuthToken",
+              "googleUserEmail",
+              "googleTokenExpiry",
+            ]);
+            if (chrome.runtime.lastError) {
+              console.warn("Error clearing auth data:", chrome.runtime.lastError.message);
+            }
+          } catch (error) {
+            console.error("Error clearing auth data:", error);
+          }
 
           googleUserInfo.style.display = "none";
           googleSignInBtn.style.display = "inline-block";
@@ -1324,6 +1482,21 @@ googleSignOutBtn.onclick = () => {
           showMessage("Signed out!", "success");
         }
       );
+    } else {
+      // No token, just clear local data
+      chrome.storage.local.remove([
+        "googleAuthToken",
+        "googleUserEmail",
+        "googleTokenExpiry",
+      ], () => {
+        if (chrome.runtime.lastError) {
+          console.warn("Error clearing auth data:", chrome.runtime.lastError.message);
+        }
+        googleUserInfo.style.display = "none";
+        googleSignInBtn.style.display = "inline-block";
+        googleSignOutBtn.style.display = "none";
+        showMessage("Signed out!", "success");
+      });
     }
   });
 };

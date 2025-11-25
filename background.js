@@ -103,7 +103,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const openPromises = request.tabs.map(async (tab, index) => {
       try {
         console.log(`Background: Opening tab ${index + 1}: ${tab.title}`);
+        
+        // Validate URL before attempting to open
+        if (!tab.url || typeof tab.url !== 'string' || tab.url.length === 0) {
+          console.warn(`Background: Invalid URL for tab ${index + 1}:`, tab.url);
+          return { success: false, error: "Invalid URL", tab };
+        }
+
         const createdTab = await chrome.tabs.create({ url: tab.url });
+        
+        if (chrome.runtime.lastError) {
+          console.warn(`Background: Tab creation error for tab ${index + 1}:`, chrome.runtime.lastError.message);
+          return { success: false, error: chrome.runtime.lastError.message, tab };
+        }
+
         console.log(
           `Background: Successfully opened tab ${index + 1} with ID: ${
             createdTab.id
@@ -167,6 +180,11 @@ async function initializeAutoSave() {
       "autoSaveShowNotification",
     ]);
 
+    if (chrome.runtime.lastError) {
+      console.warn("Tab Saver Pro: Error loading auto-save settings:", chrome.runtime.lastError.message);
+      return;
+    }
+
     autoSaveEnabled = result.autoSaveEnabled || false;
     autoSaveIdleTime = result.autoSaveIdleTime || 120;
     autoSaveShowNotification =
@@ -191,36 +209,58 @@ async function initializeAutoSave() {
 
 // Start idle detection
 function startIdleDetection() {
-  // Set up idle detection interval
-  chrome.idle.setDetectionInterval(autoSaveIdleTime);
-
-  // Remove the old listener if exists
-  if (idleStateListener) {
-    chrome.idle.onStateChanged.removeListener(idleStateListener);
-  }
-
-  // Add new listener
-  idleStateListener = async (state) => {
-    console.log("Tab Saver Pro: Idle state changed to:", state);
-    if (state === "idle" && autoSaveEnabled) {
-      await performAutoSave();
+  try {
+    // Set up idle detection interval
+    chrome.idle.setDetectionInterval(autoSaveIdleTime);
+    
+    if (chrome.runtime.lastError) {
+      console.warn("Tab Saver Pro: Error setting idle detection interval:", chrome.runtime.lastError.message);
+      return;
     }
-  };
 
-  chrome.idle.onStateChanged.addListener(idleStateListener);
-  console.log(
-    "Tab Saver Pro: Idle detection started with interval:",
-    autoSaveIdleTime,
-    "seconds"
-  );
+    // Remove the old listener if exists
+    if (idleStateListener) {
+      chrome.idle.onStateChanged.removeListener(idleStateListener);
+    }
+
+    // Add new listener
+    idleStateListener = async (state) => {
+      console.log("Tab Saver Pro: Idle state changed to:", state);
+      if (state === "idle" && autoSaveEnabled) {
+        await performAutoSave();
+      }
+    };
+
+    chrome.idle.onStateChanged.addListener(idleStateListener);
+    
+    if (chrome.runtime.lastError) {
+      console.warn("Tab Saver Pro: Error adding idle listener:", chrome.runtime.lastError.message);
+      return;
+    }
+
+    console.log(
+      "Tab Saver Pro: Idle detection started with interval:",
+      autoSaveIdleTime,
+      "seconds"
+    );
+  } catch (error) {
+    console.error("Tab Saver Pro: Error starting idle detection:", error);
+  }
 }
 
 // Stop the idle detection
 function stopIdleDetection() {
-  if (idleStateListener) {
-    chrome.idle.onStateChanged.removeListener(idleStateListener);
-    idleStateListener = null;
-    console.log("Tab Saver Pro: Idle detection stopped");
+  try {
+    if (idleStateListener) {
+      chrome.idle.onStateChanged.removeListener(idleStateListener);
+      if (chrome.runtime.lastError) {
+        console.warn("Tab Saver Pro: Error removing idle listener:", chrome.runtime.lastError.message);
+      }
+      idleStateListener = null;
+      console.log("Tab Saver Pro: Idle detection stopped");
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error stopping idle detection:", error);
   }
 }
 
@@ -239,7 +279,17 @@ async function performAutoSave() {
     console.log("Tab Saver Pro: Performing auto-save...");
 
     // Get all tabs from current window
-    const tabs = await chrome.tabs.query({ currentWindow: true });
+    let tabs;
+    try {
+      tabs = await chrome.tabs.query({ currentWindow: true });
+      if (chrome.runtime.lastError) {
+        console.warn("Tab Saver Pro: Error querying tabs:", chrome.runtime.lastError.message);
+        return;
+      }
+    } catch (error) {
+      console.error("Tab Saver Pro: Error querying tabs:", error);
+      return;
+    }
 
     if (!tabs || tabs.length === 0) {
       console.log("Tab Saver Pro: No tabs to auto-save");
@@ -247,7 +297,17 @@ async function performAutoSave() {
     }
 
     // Get existing saved tabs
-    const result = await chrome.storage.local.get(["savedTabs"]);
+    let result;
+    try {
+      result = await chrome.storage.local.get(["savedTabs"]);
+      if (chrome.runtime.lastError) {
+        console.warn("Tab Saver Pro: Error getting saved tabs:", chrome.runtime.lastError.message);
+        return;
+      }
+    } catch (error) {
+      console.error("Tab Saver Pro: Error getting saved tabs:", error);
+      return;
+    }
     const savedTabs = result.savedTabs || [];
 
     let added = 0;
@@ -264,20 +324,32 @@ async function performAutoSave() {
 
     // Save if we added any new tabs
     if (added > 0) {
-      await chrome.storage.local.set({ savedTabs: newTabs });
-      lastAutoSaveTime = now;
+      try {
+        await chrome.storage.local.set({ savedTabs: newTabs });
+        if (chrome.runtime.lastError) {
+          console.warn("Tab Saver Pro: Error saving tabs:", chrome.runtime.lastError.message);
+          return;
+        }
+        lastAutoSaveTime = now;
 
-      console.log(`Tab Saver Pro: Auto-saved ${added} new tab(s)`);
+        console.log(`Tab Saver Pro: Auto-saved ${added} new tab(s)`);
 
-      // Show notification if enabled
-      if (autoSaveShowNotification) {
-        chrome.notifications.create({
-          type: "basic",
-          iconUrl: "icons/icon48.png",
-          title: "Tab Saver Pro - Auto-Save",
-          message: `Automatically saved ${added} new tab(s)`,
-          priority: 1,
-        });
+        // Show notification if enabled
+        if (autoSaveShowNotification) {
+          chrome.notifications.create({
+            type: "basic",
+            iconUrl: "icons/icon48.png",
+            title: "Tab Saver Pro - Auto-Save",
+            message: `Automatically saved ${added} new tab(s)`,
+            priority: 1,
+          }, (notificationId) => {
+            if (chrome.runtime.lastError) {
+              console.warn("Tab Saver Pro: Error creating notification:", chrome.runtime.lastError.message);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Tab Saver Pro: Error saving tabs:", error);
       }
     } else {
       console.log("Tab Saver Pro: No new tabs to auto-save");
@@ -369,7 +441,16 @@ initializeAutoSave();
 async function reconcileLocalAndSync() {
   try {
     const local = await chrome.storage.local.get(["savedTabs"]);
+    if (chrome.runtime.lastError) {
+      console.warn("Tab Saver Pro: Error getting local storage:", chrome.runtime.lastError.message);
+      return;
+    }
+
     const syncRaw = await chrome.storage.sync.get(["savedTabs"]);
+    if (chrome.runtime.lastError) {
+      console.warn("Tab Saver Pro: Error getting sync storage:", chrome.runtime.lastError.message);
+      // Continue with local only
+    }
 
     let localTabs = Array.isArray(local.savedTabs) ? local.savedTabs : [];
     let syncTabs = [];
@@ -387,8 +468,14 @@ async function reconcileLocalAndSync() {
 
     if (syncTabs.length > (localTabs?.length || 0)) {
       await chrome.storage.local.set({ savedTabs: syncTabs });
+      if (chrome.runtime.lastError) {
+        console.warn("Tab Saver Pro: Error setting local storage:", chrome.runtime.lastError.message);
+      }
     } else if ((localTabs?.length || 0) > syncTabs.length) {
       await chrome.storage.sync.set({ savedTabs: JSON.stringify(localTabs) });
+      if (chrome.runtime.lastError) {
+        console.warn("Tab Saver Pro: Error setting sync storage:", chrome.runtime.lastError.message);
+      }
     }
   } catch (error) {
     console.error("Tab Saver Pro: Error reconciling local/sync:", error);
@@ -409,7 +496,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && Object.prototype.hasOwnProperty.call(changes, "savedTabs")) {
       const newValue = changes.savedTabs?.newValue;
       const payload = Array.isArray(newValue) ? JSON.stringify(newValue) : JSON.stringify([]);
-      chrome.storage.sync.set({ savedTabs: payload });
+      chrome.storage.sync.set({ savedTabs: payload }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn("Tab Saver Pro: Error syncing to chrome.storage.sync:", chrome.runtime.lastError.message);
+        }
+      });
     }
   } catch (error) {
     console.error("Tab Saver Pro: Error syncing to chrome.storage.sync:", error);
