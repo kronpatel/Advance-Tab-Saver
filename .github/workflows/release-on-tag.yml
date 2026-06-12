@@ -14,10 +14,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate Release Notes
-        id: notes
+      - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          name: "Advance Tab Saver ${{ github.ref_name }}"
+          body: |
+            This release introduces major improvements across the entire extension, including critical bug fixes, productivity upgrades, a premium UI redesign, a favorites system, bulk actions, duplicate detection, storage analytics, and a simplified offline-first architecture.
+
+            ### 🌟 Highlights
+            * **Premium Modern UI:** SaaS dashboard styling with hardware-accelerated transitions, responsive cards, and calibrated contrast themes (Light, Dark, Grey).
+            * **Favorites / Starred Tabs:** Star important tabs to pin them to the top and access them instantly.
+            * **Bulk Selection & Actions:** Batch restore, export, or delete multiple tabs simultaneously.
+            * **Duplicate Tab Cleaner:** Scan and remove duplicate URLs instantly to reclaim local storage.
+            * **Storage Dashboard:** Real-time metrics grid tracking tab counts, favorites, sessions, and estimated database usage.
+            * **Save All Mode Selection:** Choice modal to save open tabs either as individual entries or as categorized sessions.
+            * **Local-First Architecture:** Complete removal of external Google auth and synchronization in favor of clean local JSON backups and restore.
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
