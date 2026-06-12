@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tab Saver Pro</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main class="ag-main-card">
+      <!-- Header Section -->
+      <header class="ag-header">
+        <div class="ag-header-left">
+          <div class="ag-header-brand">
+            <img
+              src="icons/icon48.png"
+              alt="Advance Tab Saver Pro Logo"
+              class="ag-logo"
+            />
+            <h1 class="ag-title">Advance Tab Saver Pro</h1>
+          </div>
+          <p class="ag-subtitle">Save, organize and restore tabs effortlessly.</p>
+        </div>
+        <div class="ag-header-actions">
+          <button
+            class="ag-theme-toggle-btn"
+            id="themeToggleBtn"
+            title="Toggle theme"
+            aria-label="Toggle theme"
+          >
+            <span id="themeToggleIcon" class="material-icons">dark_mode</span>
+          </button>
+          <button
+            class="ag-settings-btn"
+            id="settingsBtn"
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <span class="material-icons">settings</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Message Bar -->
+      <div
+        id="messageBar"
+        class="ag-message"
+        role="alert"
+        aria-live="polite"
+      ></div>
+
+
+
+      <!-- Status Dashboard -->
+      <section class="ag-status">
+        <div class="ag-status-header">
+          <h2 class="ag-domain" id="currentDomain">Your Tabs</h2>
+          <div class="ag-status-badge">
+            <span class="material-icons ag-check-icon">check_circle</span>
+          </div>
+        </div>
+        <div class="ag-status-stats">
+          <div class="ag-stat-item">
+            <div class="ag-stat-value">
+              <span id="tabCount">0</span>
+            </div>
+            <div class="ag-stat-label">Saved</div>
+          </div>
+          <div class="ag-stat-divider"></div>
+          <div class="ag-stat-item">
+            <div class="ag-stat-value" id="totalTabs">0 Total</div>
+          </div>
+        </div>
+        <button class="ag-export-link" id="exportBtn">
+          <span class="material-icons">download</span>
+          <span>Export your tabs</span>
+        </button>
+      </section>
+
+      <!-- Navigation Tabs -->
+      <nav class="ag-tabs" role="tablist">
+        <button
+          class="ag-tab-btn ag-tab-btn-active"
+          id="actionsTab"
+          role="tab"
+          aria-selected="true"
+          aria-controls="actionsContent"
+        >
+          <span class="material-icons">dashboard</span>
+          <span>Actions</span>
+        </button>
+        <button
+          class="ag-tab-btn"
+          id="statsTab"
+          role="tab"
+          aria-selected="false"
+          aria-controls="statsContent"
+        >
+          <span class="material-icons">bar_chart</span>
+          <span>Statistics</span>
+        </button>
+      </nav>
+
+      <!-- Actions Tab Content -->
+      <div
+        class="ag-tab-content"
+        id="actionsContent"
+        role="tabpanel"
+        aria-labelledby="actionsTab"
+      >
+        <!-- Quick Actions -->
+        <div class="section">
+          <section class="ag-actions-section">
+          <h3 class="ag-section-title">Quick Actions</h3>
+          <div class="ag-category-row" aria-label="Category selection">
+            <label for="categorySelect" class="ag-form-label">
+              <span class="material-icons">category</span>
+              <span>Category</span>
+            </label>
+            <div class="ag-category-controls">
+              <select id="categorySelect" class="ag-select">
+                <option value="Work">Work</option>
+                <option value="Project">Project</option>
+                <option value="Study">Study</option>
+                <option value="Personal">Personal</option>
+                <option value="Custom">Custom…</option>
+              </select>
+              <input
+                id="customCategoryInput"
+                class="ag-input hidden"
+                type="text"
+                placeholder="Enter custom category"
+                aria-label="Custom category"
+              />
+            </div>
+          </div>
+          <div class="ag-actions-grid">
+            <button class="ag-action-card" id="saveCurrentBtn">
+              <div class="ag-action-icon">
+                <span class="material-icons">bookmark_add</span>
+              </div>
+              <div class="ag-action-text">
+                <div class="ag-action-title">Save Current</div>
+                <div class="ag-action-desc">Save active tab</div>
+              </div>
+            </button>
+            <button class="ag-action-card" id="saveAllBtn">
+              <div class="ag-action-icon">
+                <span class="material-icons">save</span>
+              </div>
+              <div class="ag-action-text">
+                <div class="ag-action-title">Save All</div>
+                <div class="ag-action-desc">Save all tabs</div>
+              </div>
+            </button>
+            <button class="ag-action-card" id="openAllBtn">
+              <div class="ag-action-icon">
+                <span class="material-icons">folder_open</span>
+              </div>
+              <div class="ag-action-text">
+                <div class="ag-action-title">Open All</div>
+                <div class="ag-action-desc">Restore saved tabs</div>
+              </div>
+            </button>
+            <button class="ag-action-card ag-action-card-danger" id="clearBtn">
+              <div class="ag-action-icon">
+                <span class="material-icons">delete</span>
+              </div>
+              <div class="ag-action-text">
+                <div class="ag-action-title">Delete All</div>
+                <div class="ag-action-desc">Clear all tabs</div>
+              </div>
+            </button>
+          </div>
+          </section>
+        </div>
+
+        <!-- File Operations -->
+        <div class="section">
+          <section class="ag-file-section">
+          <h3 class="ag-section-title">File Operations</h3>
+          <div class="ag-file-actions">
+            <button class="ag-list-item" id="importBtn">
+              <span class="ag-list-icon material-icons">file_upload</span>
+              <span>Import Tabs</span>
+            </button>
+          </div>
+          </section>
+        </div>
+
+
+
+        <!-- Search & Tab List -->
+        <div class="section">
+          <section class="ag-tabs-section">
+          <h3 class="ag-section-title">Saved Tabs</h3>
+          <div class="ag-search-row">
+            <div class="ag-search-container">
+              <span class="material-icons ag-search-icon">search</span>
+              <input
+                id="searchInput"
+                class="ag-search-input"
+                type="text"
+                placeholder="Search tabs..."
+                aria-label="Search saved tabs"
+              />
+            </div>
+            <select id="categoryFilter" class="ag-select-filter" aria-label="Filter by category">
+              <option value="All">All Categories</option>
+              <option value="Work">Work</option>
+              <option value="Project">Project</option>
+              <option value="Study">Study</option>
+              <option value="Personal">Personal</option>
+              <option value="Custom">Custom / Other</option>
+            </select>
+          </div>
+          
+          <!-- Bulk Selection Panel -->
+          <div class="ag-bulk-container hidden" id="bulkControls">
+            <div class="ag-bulk-header">
+              <label class="ag-checkbox-label" style="display: inline-flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="selectAllCheckbox" class="ag-checkbox" />
+                <span class="ag-checkbox-custom"></span>
+                <span id="selectAllLabel" style="font-size: 13px; font-weight: 600;">Select All</span>
+              </label>
+              <span id="selectedCountText" class="ag-selected-count">Selected: 0 Tabs</span>
+            </div>
+            <div class="ag-bulk-actions">
+              <button class="btn bulk-btn restore" id="bulkOpenBtn" title="Open Selected">
+                <span class="material-icons" style="font-size: 16px;">open_in_new</span>
+                <span>Open</span>
+              </button>
+              <button class="btn bulk-btn" id="bulkExportBtn" title="Export Selected">
+                <span class="material-icons" style="font-size: 16px;">download</span>
+                <span>Export</span>
+              </button>
+              <button class="btn bulk-btn delete" id="bulkDeleteBtn" title="Delete Selected">
+                <span class="material-icons" style="font-size: 16px;">delete</span>
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="tabList" class="ag-tab-list"></div>
+          </section>
+        </div>
+
+        <!-- Saved Sessions List -->
+        <div class="section">
+          <section class="ag-tabs-section">
+          <h3 class="ag-section-title">Saved Sessions</h3>
+          <div id="sessionsList"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Statistics Tab Content -->
+      <div
+        class="ag-tab-content"
+        id="statsContent"
+        style="display: none"
+        role="tabpanel"
+        aria-labelledby="statsTab"
+      >
+        <section class="ag-stats-section">
+          <h3 class="ag-section-title">Storage Dashboard</h3>
+          <div class="ag-stats-grid">
+            <div class="ag-stat-card">
+              <div class="ag-stat-card-icon">
+                <span class="material-icons">storage</span>
+              </div>
+              <div class="ag-stat-card-content">
+                <div class="ag-stat-card-label">Total Tabs</div>
+                <div class="ag-stat-card-value" id="statsTotal">0</div>
+              </div>
+            </div>
+            <div class="ag-stat-card">
+              <div class="ag-stat-card-icon" style="background: rgba(255, 193, 7, 0.15);">
+                <span class="material-icons" style="color: #ffc107;">star</span>
+              </div>
+              <div class="ag-stat-card-content">
+                <div class="ag-stat-card-label">Favorite Tabs</div>
+                <div class="ag-stat-card-value" id="statsFavorites" style="color: #ffc107;">0</div>
+              </div>
+            </div>
+            <div class="ag-stat-card">
+              <div class="ag-stat-card-icon" style="background: rgba(33, 150, 243, 0.15);">
+                <span class="material-icons" style="color: #2196f3;">folder</span>
+              </div>
+              <div class="ag-stat-card-content">
+                <div class="ag-stat-card-label">Saved Sessions</div>
+                <div class="ag-stat-card-value" id="statsSessions" style="color: #2196f3;">0</div>
+              </div>
+            </div>
+            <div class="ag-stat-card">
+              <div class="ag-stat-card-icon" style="background: rgba(76, 175, 80, 0.15);">
+                <span class="material-icons" style="color: #4caf50;">dns</span>
+              </div>
+              <div class="ag-stat-card-content">
+                <div class="ag-stat-card-label">Storage Used</div>
+                <div class="ag-stat-card-value" id="statsStorage" style="color: #4caf50;">0 KB</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Duplicate Scan & Maintenance -->
+        <section class="ag-stats-section" style="margin-top: 16px;">
+          <h3 class="ag-section-title">Storage Maintenance</h3>
+          <div class="ag-stat-card" style="flex-direction: column; align-items: stretch; gap: 12px; grid-column: span 2;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="ag-stat-card-icon" style="background: rgba(228, 110, 110, 0.15);">
+                <span class="material-icons" style="color: var(--danger-color);">find_in_page</span>
+              </div>
+              <div class="ag-stat-card-content">
+                <div class="ag-stat-card-label">Duplicate Tab Detector</div>
+                <div class="ag-stat-card-value" id="duplicateCountSpan" style="font-size: 1.15em; color: var(--text-primary);">Unscanned</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 4px;">
+              <button class="btn ag-btn-primary" id="scanDuplicatesBtn" style="flex: 1; min-height: 32px; padding: 6px 12px; font-size: 12px;">
+                <span class="material-icons" style="font-size: 16px;">search</span>
+                <span>Scan Duplicates</span>
+              </button>
+              <button class="btn ag-btn-primary delete" id="removeDuplicatesBtn" style="flex: 1; min-height: 32px; padding: 6px 12px; font-size: 12px;" disabled>
+                <span class="material-icons" style="font-size: 16px;">delete_sweep</span>
+                <span>Remove Duplicates</span>
+              </button>
+            </div>
+            <div id="duplicateCleanResult" class="ag-form-help" style="margin-top: 0; display: none; text-align: center; color: var(--accent-primary); font-weight: 500; font-style: normal;"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Footer -->
+      <footer class="ag-footer">
+        <span>Tab Saver Pro &copy; 2025 KERZOX. All rights reserved.</span>
+      </footer>
+    </main>
+
+    <!-- Settings Modal -->
+    <dialog id="settingsModal" class="ag-dialog">
+      <div class="ag-dialog-header">
+        <h3 class="ag-dialog-title">Settings</h3>
+        <button
+          class="ag-dialog-close"
+          id="closeSettingsBtn"
+          aria-label="Close settings"
+        >
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="ag-dialog-content">
+        <div class="ag-form-group">
+          <label for="themeSelect" class="ag-form-label">
+            <span class="material-icons">palette</span>
+            <span>Theme</span>
+          </label>
+          <select id="themeSelect" class="ag-select">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="grey">Grey</option>
+          </select>
+        </div>
+        <div class="ag-form-group">
+          <label for="fontSelect" class="ag-form-label">
+            <span class="material-icons">format_size</span>
+            <span>Font Size</span>
+          </label>
+          <select id="fontSelect" class="ag-select">
+            <option value="12px">Small</option>
+            <option value="14px">Medium</option>
+            <option value="16px">Large</option>
+          </select>
+        </div>
+        
+        <div class="ag-form-divider"></div>
+        <h4 class="ag-form-section-title">Auto-Save Settings</h4>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label ag-checkbox-label">
+            <input type="checkbox" id="autoSaveEnabled" class="ag-checkbox" />
+            <span class="ag-checkbox-custom"></span>
+            <span>Enable Auto-Save</span>
+          </label>
+          <p class="ag-form-help">Automatically save tabs when idle</p>
+        </div>
+        
+        <div class="ag-form-group">
+          <label for="autoSaveIdleTime" class="ag-form-label">
+            <span class="material-icons">timer</span>
+            <span>Idle Time (seconds)</span>
+          </label>
+          <select id="autoSaveIdleTime" class="ag-select">
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="180">3 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="600">10 minutes</option>
+          </select>
+          <p class="ag-form-help">Time before auto-save triggers</p>
+        </div>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label ag-checkbox-label">
+            <input type="checkbox" id="autoSaveShowNotification" class="ag-checkbox" />
+            <span class="ag-checkbox-custom"></span>
+            <span>Show Notifications</span>
+          </label>
+          <p class="ag-form-help">Display notification when auto-save occurs</p>
+        </div>
+      </div>
+      <div class="ag-dialog-footer">
+        <button id="saveSettingsBtn" class="ag-btn ag-btn-primary">
+          <span class="material-icons">check</span>
+          <span>Save Settings</span>
+        </button>
+      </div>
+    </dialog>
+
+    <!-- Save All Mode Modal -->
+    <div id="saveAllModeModal" class="modal hidden">
+      <div class="modal-content" style="max-width: 340px;">
+        <h2>Save All Tabs</h2>
+        <p id="saveAllCountMessage" style="font-size: 13px; color: var(--text-primary); margin-bottom: 16px; font-weight: 500; line-height: 1.4;">
+          You currently have 0 open tabs. Choose how you want to save them.
+        </p>
+        
+        <div class="ag-form-group" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+          <label class="ag-radio-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+            <input type="radio" name="saveAllMode" value="individual" checked class="ag-radio" style="cursor: pointer; width: 18px; height: 18px; accent-color: var(--accent-primary);" />
+            <span>Save as Individual Tabs</span>
+          </label>
+          <label class="ag-radio-label" style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+            <input type="radio" name="saveAllMode" value="session" class="ag-radio" style="cursor: pointer; width: 18px; height: 18px; accent-color: var(--accent-primary);" />
+            <span>Save as Session</span>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancelSaveAllModeBtn" class="btn cancel">Cancel</button>
+          <button id="continueSaveAllModeBtn" class="btn save">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save Session Modal -->
+    <div id="saveSessionModal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Save current session</h2>
+        <input type="text" id="sessionNameInput" placeholder="Enter session name...">
+        <p id="sessionNameError" class="error-text hidden">Please enter a name.</p>
+        
+        <div class="ag-form-group" style="margin-bottom: 16px;">
+          <label for="sessionCategorySelect" class="ag-form-label" style="font-size: 13px; margin-bottom: 6px;">
+            <span class="material-icons" style="font-size: 16px;">category</span>
+            <span>Category</span>
+          </label>
+          <select id="sessionCategorySelect" class="ag-select" style="padding: 8px 12px; font-size: 13px;">
+            <option value="Work">Work</option>
+            <option value="Project">Project</option>
+            <option value="Study">Study</option>
+            <option value="Personal">Personal</option>
+            <option value="Custom">Custom…</option>
+          </select>
+          <input
+            id="sessionCustomCategoryInput"
+            class="ag-input hidden"
+            type="text"
+            placeholder="Enter custom category"
+            aria-label="Custom category"
+            style="margin-top: 8px; padding: 8px 12px; font-size: 13px; width: 100%;"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancelSaveBtn" class="btn cancel">Cancel</button>
+          <button id="confirmSaveBtn" class="btn save" disabled>Save Session</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

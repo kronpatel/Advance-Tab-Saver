@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advance Tab Saver - Save Memory & Boost Speed</title>
+    <style>
+        /* --- CSS Variables & Theme Setup --- */
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --text-light: #64748b;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Dark Mode Variables */
+        body.dark-mode {
+            --primary-color: #60a5fa;
+            --primary-hover: #3b82f6;
+            --bg-color: #0f172a;
+            --text-color: #f1f5f9;
+            --text-light: #94a3b8;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        * { box-sizing: border-box; transition: background-color 0.3s, color 0.3s; }
+        
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* --- Animations (Fade In) --- */
+        .hidden {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+        .show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- Header & Hero Section --- */
+        header {
+            text-align: center;
+            padding: 100px 20px 60px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: -webkit-linear-gradient(45deg, var(--primary-color), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .tagline { font-size: 1.25rem; color: var(--text-light); margin-bottom: 30px; }
+
+        .btn {
+            display: inline-block;
+            background-color: var(--primary-color);
+            color: #fff !important;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: bold;
+            margin: 5px;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); background-color: var(--primary-hover); }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color) !important;
+        }
+
+        /* --- Dark Mode Toggle Button --- */
+        .theme-toggle {
+            position: fixed;
+            top: 10px;
+            right: 20px;
+            background: var(--card-bg);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.0rem;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+        }
+
+        /* --- Features Grid --- */
+        .section-title { text-align: center; margin: 80px 0 40px; font-size: 2rem; }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+        .feature-card {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+        .icon { font-size: 2.5rem; margin-bottom: 15px; display: block; }
+
+        /* --- Comparison Table --- */
+        .table-container { overflow-x: auto; border-radius: 12px; box-shadow: var(--shadow); }
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg); min-width: 600px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        th { background: var(--primary-color); color: white; }
+        
+        /* --- Installation Code Box --- */
+        .code-box {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #e2e8f0;
+            font-family: monospace;
+            margin: 20px auto;
+            max-width: 600px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .copy-btn {
+            background: #475569;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .copy-btn:active { transform: scale(0.95); }
+
+        /* --- Testimonials --- */
+        .reviews { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .review-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            margin-top: 80px;
+            padding: 40px;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
+            color: var(--text-light);
+        }
+
+        /* Mobile Tweaks */
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+            header { padding-top: 80px; }
+        }
+    </style>
+</head>
+<body>
+
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode">🌙</button>
+
+    <header>
+        <div class="container hidden">
+            <h1>Advance Tab Saver</h1>
+            <p class="tagline">Stop Chrome from eating your RAM. Suspend tabs instantly.</p>
+            
+            <div>
+                <a href="https://github.com/kronpatel/Advance-Tab-Saver" class="btn">View on GitHub</a>
+                <a href="https://github.com/kronpatel/Advance-Tab-Saver/archive/refs/heads/main.zip" class="btn btn-outline">Download ZIP</a>
+            </div>
+
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <h2 class="section-title hidden">Key Features</h2>
+        <section class="features hidden">
+            <div class="feature-card">
+                <span class="icon">🚀</span>
+                <h3>Speed Up PC</h3>
+                <p>Automatically suspends inactive tabs to free up system resources and keep your computer fast.</p>
+            </div>
+            <div class="feature-card">
+                <span class="icon">🔋</span>
+                <h3>Save Battery</h3>
+                <p>Less memory usage means less CPU work, giving you significantly longer battery life on laptops.</p>
+            </div>
+            <div class="feature-card">
+                <span class="icon">🛡️</span>
+                <h3>Privacy Focused</h3>
+                <p>Open source and secure. Your browsing data never leaves your computer.</p>
+            </div>
+        </section>
+
+        <h2 class="section-title hidden">Why Choose Us?</h2>
+        <div class="table-container hidden">
+            <table>
+                <tr>
+                    <th>Feature</th>
+                    <th>Standard Chrome</th>
+                    <th>With Tab Saver</th>
+                </tr>
+                <tr>
+                    <td>RAM Usage</td>
+                    <td style="color: #ef4444;">Heavy</td>
+                    <td style="color: #22c55e; font-weight: bold;">Minimal</td>
+                </tr>
+                <tr>
+                    <td>Tab clutter</td>
+                    <td>Messy</td>
+                    <td>Organized</td>
+                </tr>
+                <tr>
+                    <td>Cost</td>
+                    <td>Free</td>
+                    <td>Free & Open Source</td>
+                </tr>
+            </table>
+        </div>
+
+        <h2 class="section-title hidden">Users Love It</h2>
+        <section class="reviews hidden">
+            <div class="review-card">
+                <p>⭐⭐⭐⭐⭐<br>"Finally, my laptop doesn't heat up when I have 50 tabs open. A lifesaver!"</p>
+                <small>- TechEnthusiast</small>
+            </div>
+            <div class="review-card">
+                <p>⭐⭐⭐⭐⭐<br>"Simple, clean, and does exactly what it says. Highly recommended."</p>
+                <small>- David_10</small>
+            </div>
+            <div class="review-card">
+                <p>⭐⭐⭐⭐⭐<br>"The dark mode support is beautiful. Best open source tool I found."</p>
+                <small>- Sara K.</small>
+            </div>
+        </section>
+
+        <section class="hidden" style="text-align: center; margin-top: 80px;">
+            <h2>Get Started for Developers</h2>
+            <p>Clone the repository to contribute or install manually.</p>
+            
+            <div class="code-box">
+                <span id="git-command">git clone https://github.com/kronpatel/Advance-Tab-Saver.git</span>
+                <button class="copy-btn" onclick="copyCode()">Copy</button>
+            </div>
+        </section>
+
+    </div>
+
+    <footer>
+        <p>Made with ❤️ by Kron Patel</p>
+        <p><small>Licensed under MIT • <a href="https://github.com/kronpatel/Advance-Tab-Saver" style="color: var(--primary-color)">View Source</a></small></p>
+    </footer>
+
+    <script>
+        // --- Feature 1: Dark Mode Logic ---
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.querySelector('.theme-toggle');
+            
+            body.classList.toggle('dark-mode');
+            
+            // Save preference logic optional but added for better UX
+            if (body.classList.contains('dark-mode')) {
+                btn.innerHTML = '☀️';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                btn.innerHTML = '🌙';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        // Load saved theme
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-mode');
+            document.querySelector('.theme-toggle').innerHTML = '☀️';
+        }
+
+        // --- Feature 2: Scroll Animations ---
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('show');
+                }
+            });
+        });
+        const hiddenElements = document.querySelectorAll('.hidden');
+        hiddenElements.forEach((el) => observer.observe(el));
+
+        // --- Feature 3: Copy Function ---
+        function copyCode() {
+            const command = document.getElementById('git-command').innerText;
+            navigator.clipboard.writeText(command).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.innerText = 'Copied!';
+                btn.style.background = '#22c55e';
+                setTimeout(() => {
+                    btn.innerText = 'Copy';
+                    btn.style.background = '#475569';
+                }, 2000);
+            });
+        }
+    </script>
+
+</body>
+</html>
