@@ -3,334 +3,938 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advance Tab Saver - Save Memory & Boost Speed</title>
+    <title>Tab Saver Pro - Save Memory & Organize Browser Tabs</title>
+    <meta name="description" content="A premium Chrome extension to save, organize, categorize, restore, and manage browser tabs with favorites, bulk actions, duplicate detection, and storage analytics.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
-        /* --- CSS Variables & Theme Setup --- */
+        /* --- Design System & CSS Variables --- */
         :root {
-            --primary-color: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg-color: #f8fafc;
-            --text-color: #1e293b;
-            --text-light: #64748b;
-            --card-bg: #ffffff;
-            --border-color: #e2e8f0;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --font-display: 'Outfit', sans-serif;
+            --font-body: 'Inter', sans-serif;
+            
+            /* Calibrated HSL Theme Variables */
+            --primary-hsl: 220 90% 56%;
+            --primary: hsl(var(--primary-hsl));
+            --primary-hover: hsl(220 90% 46%);
+            
+            /* Theme overrides default to Dark */
+            --bg-hsl: 222 47% 11%;
+            --bg: hsl(var(--bg-hsl));
+            --card-hsl: 222 47% 6%;
+            --card: hsl(var(--card-hsl));
+            --text-hsl: 210 40% 98%;
+            --text: hsl(var(--text-hsl));
+            --text-muted-hsl: 215 20.2% 65.1%;
+            --text-muted: hsl(var(--text-muted-hsl));
+            --border-hsl: 217.2 32.6% 17.5%;
+            --border: hsl(var(--border-hsl));
+            --shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+            --gradient: linear-gradient(135deg, hsl(220 90% 56%) 0%, hsl(262 83% 58%) 100%);
+            --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
         }
 
-        /* Dark Mode Variables */
-        body.dark-mode {
-            --primary-color: #60a5fa;
-            --primary-hover: #3b82f6;
-            --bg-color: #0f172a;
-            --text-color: #f1f5f9;
-            --text-light: #94a3b8;
-            --card-bg: #1e293b;
-            --border-color: #334155;
-            --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        /* Light Theme */
+        body.theme-light {
+            --bg-hsl: 210 40% 98%;
+            --bg: hsl(var(--bg-hsl));
+            --card-hsl: 0 0% 100%;
+            --card: hsl(var(--card-hsl));
+            --text-hsl: 222 47% 11%;
+            --text: hsl(var(--text-hsl));
+            --text-muted-hsl: 215.4 16.3% 46.9%;
+            --text-muted: hsl(var(--text-muted-hsl));
+            --border-hsl: 214.3 31.8% 91.4%;
+            --border: hsl(var(--border-hsl));
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            --card-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
         }
 
-        * { box-sizing: border-box; transition: background-color 0.3s, color 0.3s; }
-        
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
+        /* Grey Theme */
+        body.theme-grey {
+            --bg-hsl: 218 11% 19%;
+            --bg: hsl(var(--bg-hsl));
+            --card-hsl: 218 11% 14%;
+            --card: hsl(var(--card-hsl));
+            --text-hsl: 210 20% 98%;
+            --text: hsl(var(--text-hsl));
+            --text-muted-hsl: 218 11% 65%;
+            --text-muted: hsl(var(--text-muted-hsl));
+            --border-hsl: 218 11% 25%;
+            --border: hsl(var(--border-hsl));
+            --shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        /* Reset & Global */
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg);
+            color: var(--text);
             overflow-x: hidden;
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 24px;
         }
 
-        /* --- Animations (Fade In) --- */
-        .hidden {
-            opacity: 0;
-            transform: translateY(30px);
-            transition: all 0.8s ease-out;
-        }
-        .show {
-            opacity: 1;
-            transform: translateY(0);
+        /* --- Header / Navbar --- */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: rgba(var(--bg-hsl), 0.8);
+            backdrop-filter: blur(12px);
+            z-index: 100;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
         }
 
-        /* --- Header & Hero Section --- */
-        header {
+        .logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .version-tag {
+            background: var(--primary);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Theme Switcher */
+        .theme-selector {
+            display: flex;
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 4px;
+            border-radius: 30px;
+            gap: 4px;
+            box-shadow: var(--shadow);
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-family: var(--font-body);
+        }
+
+        .theme-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            padding: 80px 0 60px;
             text-align: center;
-            padding: 100px 20px 60px;
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--border-color);
+            position: relative;
         }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(37, 99, 235, 0.15) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 100%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
         h1 {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, var(--primary-color), #8b5cf6);
+            font-family: var(--font-display);
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+            background: var(--gradient);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .tagline { font-size: 1.25rem; color: var(--text-light); margin-bottom: 30px; }
+
+        .hero p.tagline {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 650px;
+            margin: 0 auto 35px;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
 
         .btn {
-            display: inline-block;
-            background-color: var(--primary-color);
-            color: #fff !important;
-            padding: 12px 30px;
-            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: #ffffff;
+            font-family: var(--font-body);
+            font-weight: 600;
+            padding: 14px 32px;
             border-radius: 50px;
-            font-weight: bold;
-            margin: 5px;
-            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.3);
-            transition: transform 0.2s;
+            text-decoration: none;
+            box-shadow: 0 4px 20px rgba(37, 99, 235, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            cursor: pointer;
+            border: none;
         }
-        .btn:hover { transform: translateY(-2px); background-color: var(--primary-hover); }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            background: var(--primary-hover);
+            box-shadow: 0 6px 24px rgba(37, 99, 235, 0.45);
+        }
+
         .btn-outline {
             background: transparent;
-            border: 2px solid var(--primary-color);
-            color: var(--primary-color) !important;
+            color: var(--text);
+            border: 2px solid var(--border);
+            box-shadow: none;
         }
 
-        /* --- Dark Mode Toggle Button --- */
-        .theme-toggle {
-            position: fixed;
-            top: 10px;
-            right: 20px;
-            background: var(--card-bg);
-            color: var(--text-color);
-            border: 2px solid var(--border-color);
-            padding: 10px;
+        .btn-outline:hover {
+            background: var(--card);
+            border-color: var(--text);
+            box-shadow: var(--shadow);
+            transform: translateY(-2px);
+        }
+
+        /* --- Scroll Animations --- */
+        .animate-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        .animate-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- Interactive Showcase Dashboard Simulator --- */
+        .showcase {
+            margin: 60px auto;
+            max-width: 900px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+            transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .window-header {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            gap: 8px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-red { background: #ef4444; }
+        .dot-yellow { background: #f59e0b; }
+        .dot-green { background: #10b981; }
+
+        .window-title {
+            margin-left: 20px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Simulator Body */
+        .sim-body {
+            padding: 24px;
+        }
+
+        /* Live 2x2 Dashboard Metrics */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: rgba(var(--primary-hsl), 0.04);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: var(--font-display);
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        /* Live Tabs Simulator List */
+        .sim-tabs-container {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .sim-tabs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sim-tabs-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .sim-tab-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: transform 0.2s ease;
+        }
+
+        .sim-tab-item:hover {
+            transform: translateX(4px);
+        }
+
+        .sim-tab-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sim-tab-fav {
+            font-size: 1.25rem;
+        }
+
+        .sim-tab-title {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .sim-tab-url {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        .sim-btn-star {
+            background: transparent;
+            border: none;
             cursor: pointer;
-            font-size: 1.0rem;
-            z-index: 1000;
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            transition: color 0.2s ease;
+        }
+
+        .sim-btn-star.starred {
+            color: #f59e0b;
+        }
+
+        /* Interactive controls for simulator */
+        .sim-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 16px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .sim-control-btn {
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .sim-control-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* --- What's New v3.0.0 Section --- */
+        .section-title {
+            font-family: var(--font-display);
+            font-size: 2.25rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 80px 0 40px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--card-shadow);
+            border-color: var(--primary);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            width: 48px;
+            height: 48px;
+            background: rgba(var(--primary-hsl), 0.1);
+            color: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-family: var(--font-display);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        /* --- v3.0.0 Fixes & Core Enhancements Section --- */
+        .enhancements {
+            margin: 80px auto 0;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
             box-shadow: var(--shadow);
         }
 
-        /* --- Features Grid --- */
-        .section-title { text-align: center; margin: 80px 0 40px; font-size: 2rem; }
-        .features {
+        .enhancements-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
+            gap: 32px;
+            margin-top: 24px;
         }
-        .feature-card {
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border-color);
-        }
-        .icon { font-size: 2.5rem; margin-bottom: 15px; display: block; }
 
-        /* --- Comparison Table --- */
-        .table-container { overflow-x: auto; border-radius: 12px; box-shadow: var(--shadow); }
-        table { width: 100%; border-collapse: collapse; background: var(--card-bg); min-width: 600px; }
-        th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        th { background: var(--primary-color); color: white; }
-        
-        /* --- Installation Code Box --- */
-        .code-box {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 10px;
+        .enhancement-group h4 {
+            font-family: var(--font-display);
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
             display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .enhancement-group ul {
+            list-style: none;
+        }
+
+        .enhancement-group li {
+            position: relative;
+            padding-left: 20px;
+            margin-bottom: 12px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .enhancement-group li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .enhancement-group.fixed li::before {
+            content: "✦";
+            color: var(--primary);
+        }
+
+        /* --- Installation & Get Started --- */
+        .get-started {
+            text-align: center;
+            padding: 80px 0;
+        }
+
+        .code-box {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            padding: 16px 24px;
+            border-radius: 12px;
+            display: inline-flex;
             justify-content: space-between;
             align-items: center;
             color: #e2e8f0;
             font-family: monospace;
-            margin: 20px auto;
-            max-width: 600px;
-            flex-wrap: wrap;
-            gap: 10px;
+            margin: 24px auto;
+            max-width: 650px;
+            width: 100%;
+            box-shadow: var(--shadow);
         }
+
+        .code-text {
+            overflow-x: auto;
+            white-space: nowrap;
+            font-size: 0.9rem;
+        }
+
         .copy-btn {
-            background: #475569;
+            background: #334155;
             color: white;
             border: none;
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            margin-left: 12px;
         }
-        .copy-btn:active { transform: scale(0.95); }
 
-        /* --- Testimonials --- */
-        .reviews { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
-        .review-card {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 4px solid var(--primary-color);
-            box-shadow: var(--shadow);
+        .copy-btn:hover {
+            background: #475569;
         }
 
         /* --- Footer --- */
         footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 0;
             text-align: center;
-            margin-top: 80px;
-            padding: 40px;
-            background: var(--card-bg);
-            border-top: 1px solid var(--border-color);
-            color: var(--text-light);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            background: rgba(0, 0, 0, 0.02);
         }
 
-        /* Mobile Tweaks */
-        @media (max-width: 600px) {
-            h1 { font-size: 2rem; }
-            header { padding-top: 80px; }
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive Layouts */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .metric-grid { grid-template-columns: 1fr; }
+            .section-title { font-size: 1.8rem; margin: 60px 0 30px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .enhancements { padding: 24px; }
         }
     </style>
 </head>
-<body>
+<body class="theme-dark">
 
-    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode">🌙</button>
-
-    <header>
-        <div class="container hidden">
-            <h1>Advance Tab Saver</h1>
-            <p class="tagline">Stop Chrome from eating your RAM. Suspend tabs instantly.</p>
+    <div class="container">
+        <!-- Navigation bar -->
+        <nav>
+            <a href="#" class="logo">
+                🚀 Tab Saver Pro <span class="version-tag">v3.0.0</span>
+            </a>
             
-            <div>
+            <div class="theme-selector">
+                <button class="theme-btn" onclick="setTheme('light')">Light</button>
+                <button class="theme-btn active" id="btn-dark" onclick="setTheme('dark')">Dark</button>
+                <button class="theme-btn" onclick="setTheme('grey')">Grey</button>
+            </div>
+        </nav>
+
+        <!-- Hero section -->
+        <header class="hero">
+            <h1 class="animate-on-scroll">Save Memory. Organize Fast.</h1>
+            <p class="tagline animate-on-scroll">A professional Chrome extension that cleans up tab clutter, detects duplicates, and restores browsing sessions securely.</p>
+            
+            <div class="btn-group animate-on-scroll">
                 <a href="https://github.com/kronpatel/Advance-Tab-Saver" class="btn">View on GitHub</a>
                 <a href="https://github.com/kronpatel/Advance-Tab-Saver/archive/refs/heads/main.zip" class="btn btn-outline">Download ZIP</a>
             </div>
+        </header>
 
-        </div>
-    </header>
+        <!-- Interactive Simulator -->
+        <section class="showcase animate-on-scroll">
+            <div class="window-header">
+                <span class="dot dot-red"></span>
+                <span class="dot dot-yellow"></span>
+                <span class="dot dot-green"></span>
+                <span class="window-title">Tab Saver Pro v3.0.0 Dashboard Simulator</span>
+            </div>
+            
+            <div class="sim-body">
+                <!-- Metrics Panel -->
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-val" id="metric-tabs">3</div>
+                        <div class="metric-label">Total Tabs</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="metric-favs">1</div>
+                        <div class="metric-label">Favorites</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val">1.12 KB</div>
+                        <div class="metric-label">Storage Used</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-val" id="metric-dups">1</div>
+                        <div class="metric-label">Duplicates Found</div>
+                    </div>
+                </div>
 
-    <div class="container">
+                <!-- Live Tabs list -->
+                <div class="sim-tabs-container">
+                    <div class="sim-tabs-header">
+                        <span class="sim-tabs-title">Saved Tabs & Links</span>
+                        <span style="font-size: 0.8rem; color: var(--text-muted)">Live Simulator</span>
+                    </div>
+                    
+                    <div id="sim-tabs-list">
+                        <!-- Items rendered via JS -->
+                    </div>
+                </div>
+
+                <!-- Simulator Controls -->
+                <div class="sim-controls">
+                    <button class="sim-control-btn" onclick="addMockTab()">
+                        ➕ Save New Tab
+                    </button>
+                    <button class="sim-control-btn" onclick="cleanDuplicates()">
+                        🧹 Clean Duplicates
+                    </button>
+                    <button class="sim-control-btn" onclick="resetSimulator()">
+                        🔄 Reset Simulator
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Key Features in v3.0.0 -->
+        <h2 class="section-title animate-on-scroll">What's New in Version 3.0.0</h2>
         
-        <h2 class="section-title hidden">Key Features</h2>
-        <section class="features hidden">
-            <div class="feature-card">
-                <span class="icon">🚀</span>
-                <h3>Speed Up PC</h3>
-                <p>Automatically suspends inactive tabs to free up system resources and keep your computer fast.</p>
+        <div class="features-grid">
+            <!-- Feature 1 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">⭐</div>
+                <h3>Favorites & Pinning</h3>
+                <p>Highlight your most important links with a simple star toggle to keep them grouped at the very top of your list.</p>
             </div>
-            <div class="feature-card">
-                <span class="icon">🔋</span>
-                <h3>Save Battery</h3>
-                <p>Less memory usage means less CPU work, giving you significantly longer battery life on laptops.</p>
+            
+            <!-- Feature 2 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">🗂️</div>
+                <h3>Bulk Selection Actions</h3>
+                <p>Select multiple tabs simultaneously to batch open, batch delete, or export them into clean JSON files with one single click.</p>
             </div>
-            <div class="feature-card">
-                <span class="icon">🛡️</span>
-                <h3>Privacy Focused</h3>
-                <p>Open source and secure. Your browsing data never leaves your computer.</p>
+            
+            <!-- Feature 3 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">🧹</div>
+                <h3>Duplicate Tab Cleaner</h3>
+                <p>Reclaim memory by scanning all saved URLs. Instantly remove duplicates while preserving the oldest entry date safely.</p>
             </div>
-        </section>
 
-        <h2 class="section-title hidden">Why Choose Us?</h2>
-        <div class="table-container hidden">
-            <table>
-                <tr>
-                    <th>Feature</th>
-                    <th>Standard Chrome</th>
-                    <th>With Tab Saver</th>
-                </tr>
-                <tr>
-                    <td>RAM Usage</td>
-                    <td style="color: #ef4444;">Heavy</td>
-                    <td style="color: #22c55e; font-weight: bold;">Minimal</td>
-                </tr>
-                <tr>
-                    <td>Tab clutter</td>
-                    <td>Messy</td>
-                    <td>Organized</td>
-                </tr>
-                <tr>
-                    <td>Cost</td>
-                    <td>Free</td>
-                    <td>Free & Open Source</td>
-                </tr>
-            </table>
+            <!-- Feature 4 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">📊</div>
+                <h3>Storage Analytics Grid</h3>
+                <p>Track your saved tab counts, categories, and database bytes in real-time, providing immediate visibility into usage.</p>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">🎨</div>
+                <h3>Three Premium Themes</h3>
+                <p>Toggle between optimized HSL-derived Dark, Light, and Grey themes with smooth hardware-accelerated transitions.</p>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="feature-card animate-on-scroll">
+                <div class="feature-icon">💾</div>
+                <h3>Local-First Architecture</h3>
+                <p>Removed third-party trackers, OAuth dependencies, and logins. All data is kept on your computer, with full JSON import/export support.</p>
+            </div>
         </div>
 
-        <h2 class="section-title hidden">Users Love It</h2>
-        <section class="reviews hidden">
-            <div class="review-card">
-                <p>⭐⭐⭐⭐⭐<br>"Finally, my laptop doesn't heat up when I have 50 tabs open. A lifesaver!"</p>
-                <small>- TechEnthusiast</small>
-            </div>
-            <div class="review-card">
-                <p>⭐⭐⭐⭐⭐<br>"Simple, clean, and does exactly what it says. Highly recommended."</p>
-                <small>- David_10</small>
-            </div>
-            <div class="review-card">
-                <p>⭐⭐⭐⭐⭐<br>"The dark mode support is beautiful. Best open source tool I found."</p>
-                <small>- Sara K.</small>
+        <!-- Fixes & Refinements list -->
+        <section class="enhancements animate-on-scroll">
+            <h3 style="font-family: var(--font-display); font-size: 1.5rem; text-align: center; margin-bottom: 24px;">Under the Hood Enhancements</h3>
+            
+            <div class="enhancements-grid">
+                <div class="enhancement-group">
+                    <h4>🛠️ Features Added & Fixed</h4>
+                    <ul>
+                        <li>XSS vulnerabilities resolved by escaping inputs dynamically.</li>
+                        <li>Transitioned backend logic from sync quota limits to local storage blocks.</li>
+                        <li>Optimized transitions by mapping properties explicitly instead of wildcards.</li>
+                        <li>Settings modal options persist reliably on reload.</li>
+                    </ul>
+                </div>
+                <div class="enhancement-group fixed">
+                    <h4>🛡️ Security & Performance</h4>
+                    <ul>
+                        <li>Fully offline service worker handling session updates.</li>
+                        <li>Cleaned up redundant dependencies and legacy OAuth client configurations.</li>
+                        <li>Full input validation during backup imports to prevent parsing exceptions.</li>
+                    </ul>
+                </div>
             </div>
         </section>
 
-        <section class="hidden" style="text-align: center; margin-top: 80px;">
+        <!-- Developer Setup -->
+        <section class="get-started animate-on-scroll">
             <h2>Get Started for Developers</h2>
-            <p>Clone the repository to contribute or install manually.</p>
+            <p style="color: var(--text-muted); margin-top: 8px;">Run and contribute to the project locally in a few seconds.</p>
             
             <div class="code-box">
-                <span id="git-command">git clone https://github.com/kronpatel/Advance-Tab-Saver.git</span>
+                <span class="code-text" id="git-command">git clone https://github.com/kronpatel/Advance-Tab-Saver.git</span>
                 <button class="copy-btn" onclick="copyCode()">Copy</button>
             </div>
         </section>
 
     </div>
 
+    <!-- Footer -->
     <footer>
-        <p>Made with ❤️ by Kron Patel</p>
-        <p><small>Licensed under MIT • <a href="https://github.com/kronpatel/Advance-Tab-Saver" style="color: var(--primary-color)">View Source</a></small></p>
+        <div class="container">
+            <p>Developed with ❤️ by <a href="https://github.com/kronpatel" target="_blank">Kron Patel</a></p>
+            <p style="margin-top: 8px; font-size: 0.8rem;"><small>Licensed under MIT • <a href="https://github.com/kronpatel/Advance-Tab-Saver" target="_blank">View Source on GitHub</a></small></p>
+        </div>
     </footer>
 
     <script>
-        // --- Feature 1: Dark Mode Logic ---
-        function toggleTheme() {
-            const body = document.body;
-            const btn = document.querySelector('.theme-toggle');
+        // --- Feature 1: Theme Switcher Engine ---
+        function setTheme(themeName) {
+            document.body.className = '';
+            document.body.classList.add('theme-' + themeName);
             
-            body.classList.toggle('dark-mode');
-            
-            // Save preference logic optional but added for better UX
-            if (body.classList.contains('dark-mode')) {
-                btn.innerHTML = '☀️';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                btn.innerHTML = '🌙';
-                localStorage.setItem('theme', 'light');
-            }
-        }
-
-        // Load saved theme
-        if (localStorage.getItem('theme') === 'dark') {
-            document.body.classList.add('dark-mode');
-            document.querySelector('.theme-toggle').innerHTML = '☀️';
-        }
-
-        // --- Feature 2: Scroll Animations ---
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('show');
+            // Update active states on buttons
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.toLowerCase() === themeName) {
+                    btn.classList.add('active');
                 }
             });
-        });
-        const hiddenElements = document.querySelectorAll('.hidden');
-        hiddenElements.forEach((el) => observer.observe(el));
+            
+            localStorage.setItem('site-theme', themeName);
+        }
 
-        // --- Feature 3: Copy Function ---
+        // Load theme from storage
+        const savedTheme = localStorage.getItem('site-theme') || 'dark';
+        setTheme(savedTheme);
+
+        // --- Feature 2: Scroll Animation Observer ---
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.animate-on-scroll').forEach(el => observer.observe(el));
+
+        // --- Feature 3: Copy Code Function ---
         function copyCode() {
             const command = document.getElementById('git-command').innerText;
             navigator.clipboard.writeText(command).then(() => {
                 const btn = document.querySelector('.copy-btn');
                 btn.innerText = 'Copied!';
-                btn.style.background = '#22c55e';
+                btn.style.background = '#10b981';
                 setTimeout(() => {
                     btn.innerText = 'Copy';
-                    btn.style.background = '#475569';
+                    btn.style.background = '#334155';
                 }, 2000);
             });
         }
-    </script>
 
+        // --- Feature 4: Interactive Simulator Logic ---
+        let mockTabs = [
+            { id: 1, title: 'GitHub - kronpatel/Advance-Tab-Saver', url: 'https://github.com/kronpatel/Advance-Tab-Saver', starred: true },
+            { id: 2, title: 'Chrome Web Store - Extensions', url: 'https://chrome.google.com/webstore', starred: false },
+            { id: 3, title: 'Chrome Web Store - Extensions', url: 'https://chrome.google.com/webstore', starred: false } // Intentional duplicate
+        ];
+
+        function renderSimulator() {
+            const listContainer = document.getElementById('sim-tabs-list');
+            listContainer.innerHTML = '';
+
+            // Update metrics
+            document.getElementById('metric-tabs').innerText = mockTabs.length;
+            const favoritesCount = mockTabs.filter(t => t.starred).length;
+            document.getElementById('metric-favs').innerText = favoritesCount;
+
+            // Check duplicates
+            const urls = mockTabs.map(t => t.url);
+            const duplicates = urls.filter((url, index) => urls.indexOf(url) !== index);
+            document.getElementById('metric-dups').innerText = duplicates.length;
+
+            mockTabs.forEach(tab => {
+                const tabEl = document.createElement('div');
+                tabEl.className = 'sim-tab-item';
+                tabEl.innerHTML = `
+                    <div class="sim-tab-info">
+                        <span class="sim-tab-fav">🌐</span>
+                        <div>
+                            <span class="sim-tab-title">${tab.title}</span>
+                            <span class="sim-tab-url">${tab.url}</span>
+                        </div>
+                    </div>
+                    <button class="sim-btn-star ${tab.starred ? 'starred' : ''}" onclick="toggleSimStar(${tab.id})">
+                        ${tab.starred ? '★' : '☆'}
+                    </button>
+                `;
+                listContainer.appendChild(tabEl);
+            });
+        }
+
+        function toggleSimStar(id) {
+            mockTabs = mockTabs.map(tab => {
+                if (tab.id === id) {
+                    return { ...tab, starred: !tab.starred };
+                }
+                return tab;
+            });
+            renderSimulator();
+        }
+
+        function cleanDuplicates() {
+            const seen = new Set();
+            mockTabs = mockTabs.filter(tab => {
+                if (seen.has(tab.url)) {
+                    return false;
+                }
+                seen.add(tab.url);
+                return true;
+            });
+            renderSimulator();
+        }
+
+        function addMockTab() {
+            const randomTitles = [
+                'Google Calendar',
+                'Tailwind CSS Documentation',
+                'MDN Web Docs - JavaScript',
+                'Vite.js Guide',
+                'Google Calendar' // intentionally might add duplicate
+            ];
+            const randomUrls = [
+                'https://calendar.google.com',
+                'https://tailwindcss.com/docs',
+                'https://developer.mozilla.org',
+                'https://vitejs.dev',
+                'https://calendar.google.com'
+            ];
+            const randIndex = Math.floor(Math.random() * randomTitles.length);
+            
+            const newTab = {
+                id: Date.now(),
+                title: randomTitles[randIndex],
+                url: randomUrls[randIndex],
+                starred: false
+            };
+            mockTabs.push(newTab);
+            renderSimulator();
+        }
+
+        function resetSimulator() {
+            mockTabs = [
+                { id: 1, title: 'GitHub - kronpatel/Advance-Tab-Saver', url: 'https://github.com/kronpatel/Advance-Tab-Saver', starred: true },
+                { id: 2, title: 'Chrome Web Store - Extensions', url: 'https://chrome.google.com/webstore', starred: false },
+                { id: 3, title: 'Chrome Web Store - Extensions', url: 'https://chrome.google.com/webstore', starred: false }
+            ];
+            renderSimulator();
+        }
+
+        // Initialize live simulator
+        renderSimulator();
+    </script>
 </body>
 </html>

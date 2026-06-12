@@ -10,6 +10,19 @@
 
 See the [Changelog](./CHANGELOG.md) for release notes.
 
+---
+
+## 🎉 What's New in v3.0.0
+
+Version `3.0.0` is a major upgrade introducing massive productivity improvements, a complete SaaS-style UI redesign, and security enhancements:
+
+* **⭐ Favorites System:** Instantly star (☆ / ★) saved tabs to pin them to the top of your list.
+* **🗂️ Bulk Selection:** Batch select tabs to restore, delete, or export them in one click.
+* **🧹 Duplicate Tab Cleaner:** Clean duplicate saved URLs safely while keeping the oldest records.
+* **📊 Analytics Dashboard:** A real-time 2x2 statistics panel tracking database entries and storage footprint.
+* **🎨 Calibration Themes:** Seamlessly swap between polished Light, Dark, and Grey themes.
+* **🔒 Security & Performance:** Transitioned data persistence to standard local storage, fixed XSS vulnerability, resolved background worker lifecycle bugs, and reduced rendering paint overhead by replacing CSS wildcards.
+* **💾 Local-First Security:** Complete removal of external OAuth/Google-sync trackers in favor of clean local JSON backups and restore.
 
 ---
 
