@@ -8,7 +8,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-# Advance Tab Saver
 See the [Changelog](./CHANGELOG.md) for release notes.
 
 
@@ -55,20 +54,41 @@ See the [Changelog](./CHANGELOG.md) for release notes.
 
 ## 💾 Storage Format
 
-```js
-// OLD:
-// { id, tabs }
+All saved items are persisted locally inside `chrome.storage.local`:
 
-// NEW session object stored in chrome.storage.local.savedSessions:
-{
-  id: Number,
-  name: String,
-  tabs: Array,
-  createdAt: ISOString
-}
+### 1. Saved Tab Objects (`chrome.storage.local.savedTabs`)
+```json
+[
+  {
+    "title": "GitHub",
+    "url": "https://github.com",
+    "favicon": "https://github.com/favicon.ico",
+    "savedAt": 1781226997790,
+    "category": "Work",
+    "favorite": true
+  }
+]
 ```
 
-No migration is needed; existing users without `name` will continue to work. The UI may be updated in a subsequent step to list sessions by name.
+### 2. Saved Session Objects (`chrome.storage.local.savedSessions`)
+```json
+[
+  {
+    "id": 1781227130048,
+    "name": "Project Dashboard",
+    "category": "Project",
+    "createdAt": 1781227130048,
+    "tabs": [
+      {
+        "title": "GitHub",
+        "url": "https://github.com",
+        "favicon": "https://github.com/favicon.ico",
+        "savedAt": 1781226997790
+      }
+    ]
+  }
+]
+```
 
 ---
 
