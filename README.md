@@ -12,6 +12,18 @@ See the [Changelog](./CHANGELOG.md) for release notes.
 
 ---
 
+## 🎉 What's New in v3.1.0
+
+Version `3.1.0` introduces automated data protection, smart duplicate filters, and an analytics widget:
+
+* **💾 Automatic Backup System:** Configurable daily or weekly automated database backups, complete with local retention limit controls (5, 10, or 20) and a "Create Backup Now" trigger in Settings.
+* **⏱️ Recently Saved Widget:** A dynamic dashboard panel in the Statistics tab displaying your latest saved bookmarks, complete with favicon support, "time-ago" indicators, restoration links, clipboard copies, and deletions.
+* **👁️ Restore Preview Dialog:** Prevent accidental data loss. Clicking restore triggers a side-by-side comparison modal highlighting data size, counts, and a clear red warning indicating exactly how many tabs/sessions you might lose.
+* **⚡ Auto Save Improvements:** Optimized Manifest V3 background service worker alarm polling and persistent cooldown checks, preventing write flooding while ensuring robust idle-state saves.
+* **🧹 Smart Duplicate Prevention:** Advanced URL normalization that ignores case differences, matching trailing slashes, and stripping out marketing trackers (`utm_*`, `ref`) before comparisons.
+
+---
+
 ## 🎉 What's New in v3.0.0
 
 Version `3.0.0` is a major upgrade introducing massive productivity improvements, a complete SaaS-style UI redesign, and security enhancements:

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-06-17
+
+### Added
+- Automatic Backup System (daily and weekly automated database backups).
+- Backup Retention Management (automatically prunes old files based on configuration limits of 5, 10, or 20).
+- Manual Backup Creation (instant "Create Backup Now" trigger in settings).
+- Backup Restore Support (overwriting active tabs/sessions dynamically).
+- Recently Saved Widget (statistics panel showing latest bookmarks with copy/restore/delete buttons).
+- Restore Preview Dialog (side-by-side database metric comparisons before confirming restore).
+
+### Improved
+- Auto Save Reliability (optimized idle state listener for Manifest V3).
+- URL Normalization Logic (strips tracking parameters, matching trailing slashes, and ignores case).
+
+### Fixed
+- Manifest V3 background service worker cold start issues and message delivery.
+- Inconsistent duplicate detection checks.
+
 ## [3.0.0] - 2026-06-12
 
 ### Added

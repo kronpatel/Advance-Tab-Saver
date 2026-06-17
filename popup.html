@@ -337,6 +337,16 @@
             <div id="duplicateCleanResult" class="ag-form-help" style="margin-top: 0; display: none; text-align: center; color: var(--accent-primary); font-weight: 500; font-style: normal;"></div>
           </div>
         </section>
+
+        <!-- Recently Saved Widget -->
+        <section class="ag-stats-section" style="margin-top: 16px;">
+          <h3 class="ag-section-title">Recently Saved</h3>
+          <div id="recentlySavedContainer" class="ag-stat-card" style="flex-direction: column; align-items: stretch; gap: 8px; grid-column: span 2; padding: 16px !important;">
+            <div id="recentlySavedList" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+              <!-- List of recently saved tabs -->
+            </div>
+          </div>
+        </section>
       </div>
 
       <!-- Footer -->
@@ -416,6 +426,68 @@
           </label>
           <p class="ag-form-help">Display notification when auto-save occurs</p>
         </div>
+        
+        <div class="ag-form-divider"></div>
+        <h4 class="ag-form-section-title">Auto-Backup Settings</h4>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label ag-checkbox-label">
+            <input type="checkbox" id="autoBackupEnabled" class="ag-checkbox" />
+            <span class="ag-checkbox-custom"></span>
+            <span>Enable Auto-Backup</span>
+          </label>
+          <p class="ag-form-help">Automatically backup saved tabs and sessions</p>
+        </div>
+        
+        <div class="ag-form-group">
+          <label class="ag-form-label">Backup Frequency</label>
+          <div style="display: flex; gap: 16px; margin-top: 4px;">
+            <label class="ag-radio-label" style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="autoBackupFrequency" value="daily" checked style="cursor: pointer; accent-color: var(--accent-primary);" />
+              <span>Daily</span>
+            </label>
+            <label class="ag-radio-label" style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+              <input type="radio" name="autoBackupFrequency" value="weekly" style="cursor: pointer; accent-color: var(--accent-primary);" />
+              <span>Weekly</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="ag-form-group">
+          <label for="autoBackupMaxFiles" class="ag-form-label">
+            <span class="material-icons" style="font-size: 16px;">folder_special</span>
+            <span>Maximum Backups</span>
+          </label>
+          <select id="autoBackupMaxFiles" class="ag-select">
+            <option value="5">5 Backups</option>
+            <option value="10" selected>10 Backups</option>
+            <option value="20">20 Backups</option>
+          </select>
+        </div>
+
+        <div class="ag-form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-secondary);">
+            <span>Last Backup:</span>
+            <span id="lastBackupTimeSpan" style="font-weight: 600; color: var(--text-primary);">Never</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 12px; margin-bottom: 16px;">
+          <button id="createBackupBtn" class="ag-btn ag-btn-primary" style="flex: 1; min-height: 32px; padding: 6px 12px; font-size: 12px; justify-content: center;">
+            <span class="material-icons" style="font-size: 16px;">backup</span>
+            <span>Create Backup Now</span>
+          </button>
+        </div>
+
+        <div class="ag-form-group">
+          <label class="ag-form-label">
+            <span class="material-icons" style="font-size: 16px;">restore</span>
+            <span>Restore Backup</span>
+          </label>
+          <div id="backupListContainer" style="max-height: 140px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px; background: var(--bg-tertiary); margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+            <!-- Backup list items go here -->
+          </div>
+        </div>
       </div>
       <div class="ag-dialog-footer">
         <button id="saveSettingsBtn" class="ag-btn ag-btn-primary">
@@ -483,6 +555,64 @@
         <div class="modal-actions">
           <button id="cancelSaveBtn" class="btn cancel">Cancel</button>
           <button id="confirmSaveBtn" class="btn save" disabled>Save Session</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Restore Preview Modal -->
+    <div id="restorePreviewModal" class="modal hidden">
+      <div class="modal-content" style="max-width: 380px;">
+        <h2>Restore Backup</h2>
+        
+        <div class="ag-form-group" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px;">
+          <h4 style="font-size: 11px; text-transform: uppercase; color: var(--accent-primary); margin: 0 0 8px 0; letter-spacing: 0.5px;">Backup Information</h4>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Date:</span>
+              <span id="rpBackupDate" style="font-weight: 600;">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Time:</span>
+              <span id="rpBackupTime" style="font-weight: 600;">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: var(--text-secondary);">Size:</span>
+              <span id="rpBackupSize" style="font-weight: 600;">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ag-form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+          <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">Current Data</div>
+            <div style="font-size: 12px; font-weight: 600;">Tabs: <span id="rpCurrentTabs" style="color: var(--accent-primary); font-size: 14px;">0</span></div>
+            <div style="font-size: 12px; font-weight: 600; margin-top: 2px;">Sessions: <span id="rpCurrentSessions" style="color: var(--accent-primary); font-size: 14px;">0</span></div>
+          </div>
+          <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px; font-weight: 600;">Backup Data</div>
+            <div style="font-size: 12px; font-weight: 600;">Tabs: <span id="rpBackupTabs" style="color: var(--accent-primary); font-size: 14px;">0</span></div>
+            <div style="font-size: 12px; font-weight: 600; margin-top: 2px;">Sessions: <span id="rpBackupSessions" style="color: var(--accent-primary); font-size: 14px;">0</span></div>
+          </div>
+        </div>
+
+        <!-- Overwrite Notice / Data Loss Warning -->
+        <div id="rpWarningContainer" style="background: rgba(228, 110, 110, 0.1); border: 1.5px solid var(--danger-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px; display: none;">
+          <div style="display: flex; align-items: center; gap: 8px; color: var(--danger-color); font-weight: 600; font-size: 13px; margin-bottom: 6px;">
+            <span class="material-icons" style="font-size: 18px;">warning</span>
+            <span>Data Loss Warning</span>
+          </div>
+          <p id="rpWarningText" style="font-size: 11px; color: var(--text-primary); line-height: 1.4; margin: 0;">
+            Restoring this backup will replace your current saved tabs and sessions. You may lose 55 saved tabs.
+          </p>
+        </div>
+
+        <div id="rpInfoContainer" style="background: rgba(139, 231, 139, 0.05); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px; display: block; font-size: 11px; line-height: 1.4; color: var(--text-secondary);">
+          Restoring this backup will replace your current saved tabs and sessions with the backup copy.
+        </div>
+
+        <div class="modal-actions">
+          <button id="cancelRestorePreviewBtn" class="btn cancel">Cancel</button>
+          <button id="confirmRestorePreviewBtn" class="btn save">Restore Backup</button>
         </div>
       </div>
     </div>

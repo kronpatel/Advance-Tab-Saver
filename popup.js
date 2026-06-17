@@ -12,6 +12,63 @@ if (typeof chrome === "undefined" || !chrome.runtime) {
           if (callback) callback(resp);
           return Promise.resolve(resp);
         }
+        if (msg.action === "triggerManualBackup") {
+          let savedTabs = [];
+          let savedSessions = [];
+          try {
+            const tabsVal = localStorage.getItem("savedTabs");
+            if (tabsVal) savedTabs = JSON.parse(tabsVal);
+          } catch(e){}
+          try {
+            const sessionsVal = localStorage.getItem("savedSessions");
+            if (sessionsVal) savedSessions = JSON.parse(sessionsVal);
+          } catch(e){}
+          
+          let settings = { maxBackups: 10 };
+          try {
+            const settingsVal = localStorage.getItem("autoBackupSettings");
+            if (settingsVal) settings = JSON.parse(settingsVal);
+          } catch(e){}
+          
+          const now = Date.now();
+          const newBackup = {
+            backupId: now,
+            createdAt: new Date().toISOString(),
+            tabCount: savedTabs.length,
+            sessionCount: savedSessions.length,
+            backupData: { savedTabs, savedSessions }
+          };
+          
+          let backupHistory = [];
+          try {
+            const historyVal = localStorage.getItem("backupHistory");
+            if (historyVal) backupHistory = JSON.parse(historyVal);
+          } catch(e){}
+          
+          const maxBackups = parseInt(settings.maxBackups, 10) || 10;
+          const updatedHistory = [newBackup, ...backupHistory].slice(0, maxBackups);
+          
+          settings.lastBackupTime = now;
+          
+          localStorage.setItem("backupHistory", JSON.stringify(updatedHistory));
+          localStorage.setItem("autoBackupSettings", JSON.stringify(settings));
+          
+          const resp = { success: true, backup: newBackup };
+          if (callback) callback(resp);
+          return Promise.resolve(resp);
+        }
+        if (msg.action === "updateAutoBackupSettings") {
+          try {
+            let settings = { maxBackups: 10 };
+            const settingsVal = localStorage.getItem("autoBackupSettings");
+            if (settingsVal) settings = JSON.parse(settingsVal);
+            const updated = { ...settings, ...msg.settings };
+            localStorage.setItem("autoBackupSettings", JSON.stringify(updated));
+          } catch(e){}
+          const resp = { success: true };
+          if (callback) callback(resp);
+          return Promise.resolve(resp);
+        }
         const resp = { success: true };
         if (callback) callback(resp);
         return Promise.resolve(resp);
@@ -98,6 +155,122 @@ function escapeHTML(str) {
   return str.replace(/[&<>'"]/g, 
     tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   );
+}
+
+// Normalize URL for robust duplicate comparison
+function normalizeUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return "";
+  try {
+    const url = new URL(urlStr);
+    let pathname = url.pathname;
+    if (pathname.endsWith("/") && pathname.length > 1) {
+      pathname = pathname.slice(0, -1);
+    }
+    const params = new URLSearchParams(url.search);
+    const trackingParams = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "ref"
+    ];
+    let changed = false;
+    trackingParams.forEach((param) => {
+      if (params.has(param)) {
+        params.delete(param);
+        changed = true;
+      }
+    });
+    const search = changed
+      ? params.toString()
+        ? "?" + params.toString()
+        : ""
+      : url.search;
+    return `${url.protocol}//${url.hostname}${url.port ? ":" + url.port : ""}${pathname}${search}${url.hash}`;
+  } catch (e) {
+    let cleaned = urlStr.trim();
+    if (cleaned.endsWith("/") && cleaned.length > 1) {
+      cleaned = cleaned.slice(0, -1);
+    }
+    return cleaned;
+  }
+}
+
+// Get hostname domain from URL
+function getDomain(urlStr) {
+  if (!urlStr) return "";
+  try {
+    const url = new URL(urlStr);
+    return url.hostname;
+  } catch (e) {
+    return "";
+  }
+}
+
+// Format date timestamp to time-ago format
+function timeAgo(timestamp) {
+  const diff = Date.now() - timestamp;
+  if (diff < 60000) return "Just now";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// Update recently saved list with newly saved tabs
+async function updateRecentlySaved(newTabs) {
+  if (!newTabs || newTabs.length === 0) return;
+  try {
+    const result = await chrome.storage.local.get(["recentlySaved"]);
+    const current = result.recentlySaved || [];
+    
+    const formattedNew = newTabs.map(t => ({
+      title: t.title || "Untitled",
+      url: t.url,
+      favicon: t.favicon || "",
+      savedAt: t.savedAt || Date.now()
+    }));
+    
+    let merged = [...formattedNew, ...current];
+    
+    const unique = [];
+    const seenUrls = new Set();
+    for (const item of merged) {
+      const norm = normalizeUrl(item.url);
+      if (!seenUrls.has(norm)) {
+        seenUrls.add(norm);
+        unique.push(item);
+      }
+    }
+    
+    const finalRecentlySaved = unique.slice(0, 10);
+    await chrome.storage.local.set({ recentlySaved: finalRecentlySaved });
+  } catch (error) {
+    console.error("Error updating recently saved tabs:", error);
+  }
+}
+
+// Sync recently saved tabs with current savedTabs array
+async function syncRecentlySavedWithSavedTabs() {
+  try {
+    const result = await chrome.storage.local.get(["savedTabs", "recentlySaved"]);
+    const savedTabs = result.savedTabs || [];
+    const recentlySaved = result.recentlySaved || [];
+    
+    const savedUrls = new Set(savedTabs.map(t => normalizeUrl(t.url)));
+    const updated = recentlySaved.filter(t => savedUrls.has(normalizeUrl(t.url)));
+    
+    if (updated.length !== recentlySaved.length) {
+      await chrome.storage.local.set({ recentlySaved: updated });
+    }
+    return updated;
+  } catch (e) {
+    console.error("Error syncing recently saved:", e);
+    return [];
+  }
 }
 
 // ======= DOM Elements =======
@@ -573,6 +746,14 @@ async function loadTabs() {
     
     // Update dashboard metrics
     updateDashboardMetrics();
+
+    // Sync and render recently saved widget
+    try {
+      const rs = await syncRecentlySavedWithSavedTabs();
+      renderRecentlySaved(rs);
+    } catch (e) {
+      console.error("Error loading recently saved widget:", e);
+    }
   } catch (error) {
     console.error("Error in loadTabs:", error);
     showMessage("Failed to load saved tabs", "warning");
@@ -632,6 +813,7 @@ tabList.addEventListener("click", async (e) => {
           if (totalTabs) totalTabs.textContent = `Total saved: ${newCount}`;
         }
         updateDashboardMetrics();
+        syncRecentlySavedWithSavedTabs().then(rs => renderRecentlySaved(rs));
         showMessage("Tab deleted!", "success");
       }
     } else if (e.target.closest(".star-btn")) {
@@ -725,7 +907,7 @@ saveCurrentBtn.onclick = async () => {
 
     const { savedTabs = [] } = result.data;
 
-    if (savedTabs.find((t) => t.url === sanitizedTab.url)) {
+    if (savedTabs.find((t) => normalizeUrl(t.url) === normalizeUrl(sanitizedTab.url))) {
       showMessage("This tab is already saved!", "warning");
       return;
     }
@@ -748,6 +930,7 @@ saveCurrentBtn.onclick = async () => {
     );
 
     if (saveResult.success) {
+      await updateRecentlySaved([sanitizedTab]);
       loadTabs();
       showMessage("Tab saved!", "success");
     }
@@ -872,7 +1055,7 @@ async function saveAllAsIndividualTabs() {
 
       for (const tab of sanitizedTabs) {
         // Prevent duplicate tab save: check if URL already exists
-        if (!finalTabs.find((t) => t.url === tab.url)) {
+        if (!finalTabs.find((t) => normalizeUrl(t.url) === normalizeUrl(tab.url))) {
           finalTabs.push(tab);
           addedCount++;
         }
@@ -900,6 +1083,8 @@ async function saveAllAsIndividualTabs() {
       );
 
       if (saveResult.success) {
+        const addedTabs = sanitizedTabs.filter(t => !savedTabs.find(st => normalizeUrl(st.url) === normalizeUrl(t.url)));
+        await updateRecentlySaved(addedTabs);
         await refreshTabsList();
         updateDashboardMetrics();
         showMessage(`Saved ${addedCount} tabs successfully.`, "success");
@@ -1411,7 +1596,7 @@ importBtn.onclick = () => {
 
       // Check for duplicates and limits
       const newTabs = tabs.filter(
-        (t) => !savedTabs.find((st) => st.url === t.url)
+        (t) => !savedTabs.find((st) => normalizeUrl(st.url) === normalizeUrl(t.url))
       );
       const finalTabs = [...savedTabs, ...newTabs];
 
@@ -1438,6 +1623,8 @@ importBtn.onclick = () => {
       );
 
       if (saveResult.success) {
+        const importedTabs = finalTabs.slice(savedTabs.length);
+        await updateRecentlySaved(importedTabs);
         loadTabs();
         const imported = finalTabs.length - savedTabs.length;
         const duplicates = tabs.length - newTabs.length;
@@ -1526,6 +1713,13 @@ if (categoryFilter) {
 async function openSettings() {
   settingsModal.showModal();
 
+  // Load backup UI
+  try {
+    await loadBackupsUI();
+  } catch (err) {
+    console.error("Error loading backups UI:", err);
+  }
+
   // Load current settings
   try {
     const result = await safeStorageOperation(
@@ -1588,6 +1782,11 @@ saveSettingsBtn.onclick = async () => {
     const autoSaveIdleTime = parseInt(document.getElementById("autoSaveIdleTime").value, 10);
     const autoSaveShowNotification = document.getElementById("autoSaveShowNotification").checked;
 
+    // Auto-backup settings from UI
+    const autoBackupEnabled = document.getElementById("autoBackupEnabled").checked;
+    const autoBackupFrequency = Array.from(document.getElementsByName("autoBackupFrequency")).find(r => r.checked)?.value || "daily";
+    const autoBackupMaxFiles = parseInt(document.getElementById("autoBackupMaxFiles").value, 10);
+
     // Validate settings
     const validThemes = ["dark", "light", "grey"];
     const validFonts = ["12px", "14px", "16px"];
@@ -1602,6 +1801,16 @@ saveSettingsBtn.onclick = async () => {
       return;
     }
 
+    // Preserve lastBackupTime when saving settings
+    const currentBackupSettingsResult = await chrome.storage.local.get(["autoBackupSettings"]);
+    const currentBackupSettings = currentBackupSettingsResult.autoBackupSettings || {};
+    const autoBackupSettings = {
+      enabled: autoBackupEnabled,
+      frequency: autoBackupFrequency,
+      maxBackups: autoBackupMaxFiles,
+      lastBackupTime: currentBackupSettings.lastBackupTime || 0
+    };
+
     const result = await safeStorageOperation(
       () =>
         chrome.storage.local.set({
@@ -1610,6 +1819,7 @@ saveSettingsBtn.onclick = async () => {
           autoSaveEnabled,
           autoSaveIdleTime,
           autoSaveShowNotification,
+          autoBackupSettings,
         }),
       "saving settings"
     );
@@ -1631,6 +1841,20 @@ saveSettingsBtn.onclick = async () => {
         });
       } catch (error) {
         console.error("Error updating auto-save settings:", error);
+      }
+
+      // Notify background script about auto-backup settings
+      try {
+        await chrome.runtime.sendMessage({
+          action: "updateAutoBackupSettings",
+          settings: {
+            enabled: autoBackupEnabled,
+            frequency: autoBackupFrequency,
+            maxBackups: autoBackupMaxFiles,
+          },
+        });
+      } catch (error) {
+        console.error("Error updating auto-backup settings:", error);
       }
 
       closeSettings();
@@ -1859,6 +2083,8 @@ async function bulkDeleteSelected() {
     selectedTabUrls = [];
     await refreshTabsList();
     updateDashboardMetrics();
+    const rs = await syncRecentlySavedWithSavedTabs();
+    renderRecentlySaved(rs);
     showMessage(`Deleted ${deletedCount} tabs!`, "success");
   }
 }
@@ -1875,7 +2101,8 @@ async function scanDuplicates() {
     const { savedTabs = [] } = result.data;
     const urlCounts = {};
     savedTabs.forEach((tab) => {
-      urlCounts[tab.url] = (urlCounts[tab.url] || 0) + 1;
+      const normUrl = normalizeUrl(tab.url);
+      urlCounts[normUrl] = (urlCounts[normUrl] || 0) + 1;
     });
 
     let duplicateCount = 0;
@@ -1925,10 +2152,11 @@ async function removeDuplicates() {
     // Group by URL
     const groups = {};
     savedTabs.forEach((tab) => {
-      if (!groups[tab.url]) {
-        groups[tab.url] = [];
+      const normUrl = normalizeUrl(tab.url);
+      if (!groups[normUrl]) {
+        groups[normUrl] = [];
       }
-      groups[tab.url].push(tab);
+      groups[normUrl].push(tab);
     });
 
     const cleanedTabs = [];
@@ -2111,3 +2339,382 @@ try {
     validateUI();
   }
 } catch (e) {}
+
+// ======= Auto-Backup and Recently Saved UI Logic =======
+
+// Render available backups in Settings UI
+async function loadBackupsUI() {
+  try {
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["autoBackupSettings", "backupHistory"]),
+      "loading backups UI"
+    );
+    
+    if (!result.success) return;
+    
+    const settings = result.data.autoBackupSettings || {
+      enabled: false,
+      frequency: "daily",
+      maxBackups: 10,
+      lastBackupTime: 0
+    };
+    
+    const enabledInput = document.getElementById("autoBackupEnabled");
+    if (enabledInput) enabledInput.checked = settings.enabled;
+    
+    const freqRadios = document.getElementsByName("autoBackupFrequency");
+    freqRadios.forEach(radio => {
+      if (radio.value === settings.frequency) {
+        radio.checked = true;
+      }
+    });
+    
+    const maxFilesSelect = document.getElementById("autoBackupMaxFiles");
+    if (maxFilesSelect) maxFilesSelect.value = settings.maxBackups;
+    
+    const lastBackupSpan = document.getElementById("lastBackupTimeSpan");
+    if (lastBackupSpan) {
+      lastBackupSpan.textContent = settings.lastBackupTime 
+        ? new Date(settings.lastBackupTime).toLocaleString() 
+        : "Never";
+    }
+    
+    const container = document.getElementById("backupListContainer");
+    if (container) {
+      container.innerHTML = "";
+      const backupHistory = result.data.backupHistory || [];
+      
+      if (backupHistory.length === 0) {
+        container.innerHTML = `<div style="text-align: center; font-size: 11px; color: var(--text-secondary); padding: 8px 0;">No backups available.</div>`;
+        return;
+      }
+      
+      backupHistory.forEach(backup => {
+        const item = document.createElement("div");
+        item.className = "backup-item";
+        item.style.display = "flex";
+        item.style.flexDirection = "column";
+        item.style.gap = "6px";
+        item.style.padding = "8px";
+        item.style.border = "1px solid var(--border-color)";
+        item.style.borderRadius = "var(--radius-sm)";
+        item.style.background = "var(--bg-secondary)";
+        item.style.fontSize = "11px";
+        
+        item.innerHTML = `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600; color: var(--text-primary);">Backup - ${new Date(backup.createdAt).toLocaleDateString()}</span>
+            <button class="restore-backup-btn ag-btn ag-btn-primary" data-id="${backup.backupId}" style="min-height: 22px !important; height: 22px; padding: 2px 8px; font-size: 10px; cursor: pointer;">Restore</button>
+          </div>
+          <div style="font-size: 10px; color: var(--text-secondary); display: flex; justify-content: space-between;">
+            <span>Tabs: ${backup.tabCount} | Sessions: ${backup.sessionCount}</span>
+            <span style="font-size: 9px; opacity: 0.7;">${new Date(backup.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+  } catch (error) {
+    console.error("Error loading backups UI:", error);
+  }
+}
+
+// Render recently saved tabs inside the Statistics Dashboard widget
+function renderRecentlySaved(items) {
+  const list = document.getElementById("recentlySavedList");
+  if (!list) return;
+  list.innerHTML = "";
+  
+  if (!items || items.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state" style="padding: 10px 0; text-align: center; color: var(--text-secondary); font-size: 13px;">
+        No recently saved tabs.
+      </div>
+    `;
+    return;
+  }
+  
+  items.forEach((item) => {
+    const domain = getDomain(item.url);
+    const timeAgoStr = timeAgo(item.savedAt);
+    
+    const div = document.createElement("div");
+    div.className = "recently-saved-item";
+    div.style.display = "flex";
+    div.style.alignItems = "center";
+    div.style.justifyContent = "space-between";
+    div.style.gap = "10px";
+    div.style.padding = "8px 10px";
+    div.style.border = "1.5px solid var(--border-color)";
+    div.style.borderRadius = "var(--radius-md)";
+    div.style.background = "var(--bg-secondary)";
+    div.style.width = "100%";
+    
+    div.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+        <img class="favicon" src="${item.favicon || DEFAULT_FAVICON}" onerror="this.onerror=null; this.src='${DEFAULT_FAVICON}'" style="width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0;" />
+        <div style="display: flex; flex-direction: column; min-width: 0; gap: 2px;">
+          <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary);">
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;" title="${escapeHTML(domain)}">${escapeHTML(domain)}</span>
+            <span style="opacity: 0.6;">•</span>
+            <span style="white-space: nowrap;">${timeAgoStr}</span>
+          </div>
+        </div>
+      </div>
+      <div class="recently-saved-actions" style="display: flex; gap: 4px; flex-shrink: 0;">
+        <button class="rs-action-btn rs-open" data-url="${escapeHTML(item.url)}" title="Open Tab" style="background: transparent; border: none; cursor: pointer; color: var(--accent-primary); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
+          <span class="material-icons" style="font-size: 16px;">open_in_new</span>
+        </button>
+        <button class="rs-action-btn rs-copy" data-url="${escapeHTML(item.url)}" title="Copy URL" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
+          <span class="material-icons" style="font-size: 16px;">content_copy</span>
+        </button>
+        <button class="rs-action-btn rs-delete" data-url="${escapeHTML(item.url)}" title="Remove Saved Entry" style="background: transparent; border: none; cursor: pointer; color: var(--danger-color); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
+          <span class="material-icons" style="font-size: 16px;">delete</span>
+        </button>
+      </div>
+    `;
+    
+    list.appendChild(div);
+  });
+}
+
+// Bind button event listeners once DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  // Manual Backup Button click
+  const createBackupBtn = document.getElementById("createBackupBtn");
+  if (createBackupBtn) {
+    createBackupBtn.onclick = async () => {
+      createBackupBtn.disabled = true;
+      showMessage("Creating backup...", "info");
+      try {
+        const response = await chrome.runtime.sendMessage({ action: "triggerManualBackup" });
+        if (response && response.success) {
+          showMessage("Backup created successfully!", "success");
+          await loadBackupsUI();
+        } else {
+          showMessage("Failed to create backup: " + (response.error || "Unknown error"), "warning");
+        }
+      } catch (err) {
+        console.error(err);
+        showMessage("Failed to create backup.", "warning");
+      } finally {
+        createBackupBtn.disabled = false;
+      }
+    };
+  }
+
+  // Restore Backup click delegation (triggers Preview modal)
+  const backupListContainer = document.getElementById("backupListContainer");
+  if (backupListContainer) {
+    backupListContainer.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".restore-backup-btn");
+      if (!btn) return;
+      
+      const backupId = parseInt(btn.dataset.id, 10);
+      
+      try {
+        const result = await chrome.storage.local.get(["backupHistory", "savedTabs", "savedSessions"]);
+        const backupHistory = result.backupHistory || [];
+        const backup = backupHistory.find(b => b.backupId === backupId);
+        
+        if (!backup) {
+          showMessage("Backup file not found", "warning");
+          return;
+        }
+        
+        const currentTabs = result.savedTabs || [];
+        const currentSessions = result.savedSessions || [];
+        
+        const backupTabs = backup.backupData.savedTabs || [];
+        const backupSessions = backup.backupData.savedSessions || [];
+        
+        // Calculate backup data size in KB
+        const sizeInBytes = JSON.stringify(backup.backupData).length;
+        const sizeInKB = (sizeInBytes / 1024).toFixed(1) + " KB";
+        
+        // Format Date and Time
+        const createdAtDate = new Date(backup.createdAt);
+        const dateStr = createdAtDate.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+        const timeStr = createdAtDate.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        
+        // Populate modal text fields
+        document.getElementById("rpBackupDate").textContent = dateStr;
+        document.getElementById("rpBackupTime").textContent = timeStr;
+        document.getElementById("rpBackupSize").textContent = sizeInKB;
+        
+        document.getElementById("rpCurrentTabs").textContent = currentTabs.length;
+        document.getElementById("rpCurrentSessions").textContent = currentSessions.length;
+        
+        document.getElementById("rpBackupTabs").textContent = backupTabs.length;
+        document.getElementById("rpBackupSessions").textContent = backupSessions.length;
+        
+        // Check for potential data loss
+        const warningContainer = document.getElementById("rpWarningContainer");
+        const warningText = document.getElementById("rpWarningText");
+        const infoContainer = document.getElementById("rpInfoContainer");
+        
+        const tabLoss = currentTabs.length - backupTabs.length;
+        const sessionLoss = currentSessions.length - backupSessions.length;
+        
+        if (tabLoss > 0 || sessionLoss > 0) {
+          let lossMsg = `Restoring this backup will replace your current saved tabs and sessions. `;
+          const details = [];
+          if (tabLoss > 0) details.push(`lose ${tabLoss} saved tab${tabLoss > 1 ? 's' : ''}`);
+          if (sessionLoss > 0) details.push(`lose ${sessionLoss} saved session${sessionLoss > 1 ? 's' : ''}`);
+          lossMsg += `You may ${details.join(" and ")}.`;
+          
+          warningText.textContent = lossMsg;
+          warningContainer.style.display = "block";
+          infoContainer.style.display = "none";
+        } else {
+          warningContainer.style.display = "none";
+          infoContainer.style.display = "block";
+        }
+        
+        // Store reference to active backup for confirm action
+        window.activeRestoreBackup = backup;
+        
+        // Show the Restore Preview modal
+        const restorePreviewModal = document.getElementById("restorePreviewModal");
+        if (restorePreviewModal) {
+          restorePreviewModal.classList.remove("hidden");
+        }
+      } catch (err) {
+        console.error("Error preparing restore preview modal:", err);
+        showMessage("Failed to open restore preview.", "warning");
+      }
+    });
+  }
+
+  // Cancel Restore Preview button click
+  const cancelRestorePreviewBtn = document.getElementById("cancelRestorePreviewBtn");
+  if (cancelRestorePreviewBtn) {
+    cancelRestorePreviewBtn.onclick = () => {
+      const restorePreviewModal = document.getElementById("restorePreviewModal");
+      if (restorePreviewModal) {
+        restorePreviewModal.classList.add("hidden");
+      }
+      window.activeRestoreBackup = null;
+    };
+  }
+
+  // Backdrop click to close Restore Preview modal
+  const restorePreviewModal = document.getElementById("restorePreviewModal");
+  if (restorePreviewModal) {
+    restorePreviewModal.addEventListener("click", (e) => {
+      if (e.target === restorePreviewModal) {
+        restorePreviewModal.classList.add("hidden");
+        window.activeRestoreBackup = null;
+      }
+    });
+  }
+
+  // Confirm Restore Backup button click
+  const confirmRestorePreviewBtn = document.getElementById("confirmRestorePreviewBtn");
+  if (confirmRestorePreviewBtn) {
+    confirmRestorePreviewBtn.onclick = async () => {
+      const backup = window.activeRestoreBackup;
+      if (!backup) {
+        showMessage("No active backup selected.", "warning");
+        return;
+      }
+      
+      confirmRestorePreviewBtn.disabled = true;
+      try {
+        const savedTabs = backup.backupData.savedTabs || [];
+        const savedSessions = backup.backupData.savedSessions || [];
+        
+        await chrome.storage.local.set({ savedTabs, savedSessions });
+        
+        // Hide modal
+        if (restorePreviewModal) {
+          restorePreviewModal.classList.add("hidden");
+        }
+        window.activeRestoreBackup = null;
+        
+        showMessage(`Backup restored successfully!\nTabs: ${savedTabs.length} | Sessions: ${savedSessions.length}`, "success", 4000);
+        
+        // Sync and refresh
+        await updateRecentlySaved(savedTabs);
+        loadTabs();
+        try { await loadSessions(); } catch (e) {}
+      } catch (err) {
+        console.error("Error during backup restoration:", err);
+        showMessage("Failed to restore backup.", "warning");
+      } finally {
+        confirmRestorePreviewBtn.disabled = false;
+      }
+    };
+  }
+
+  // Recently Saved Actions delegation
+  const recentlySavedList = document.getElementById("recentlySavedList");
+  if (recentlySavedList) {
+    recentlySavedList.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".rs-action-btn");
+      if (!btn) return;
+      
+      const url = btn.dataset.url;
+      if (btn.classList.contains("rs-open")) {
+        if (isValidUrl(url)) {
+          chrome.tabs.create({ url });
+          showMessage("Tab opened!", "success");
+        } else {
+          showMessage("Invalid URL cannot be opened", "warning");
+        }
+      } else if (btn.classList.contains("rs-copy")) {
+        try {
+          await navigator.clipboard.writeText(url);
+          showMessage("URL copied to clipboard!", "success");
+        } catch (err) {
+          showMessage("Failed to copy URL", "warning");
+        }
+      } else if (btn.classList.contains("rs-delete")) {
+        const confirmed = confirm("Remove this saved entry?");
+        if (!confirmed) return;
+        
+        try {
+          // Remove from savedTabs
+          const tabsResult = await safeStorageOperation(
+            () => chrome.storage.local.get(["savedTabs"]),
+            "loading tabs for rs delete"
+          );
+          if (tabsResult.success) {
+            const filtered = (tabsResult.data.savedTabs || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
+            await safeStorageOperation(
+              () => chrome.storage.local.set({ savedTabs: filtered }),
+              "saving tabs after rs delete"
+            );
+          }
+          
+          // Remove from recentlySaved
+          const rsResult = await safeStorageOperation(
+            () => chrome.storage.local.get(["recentlySaved"]),
+            "loading recently saved for rs delete"
+          );
+          if (rsResult.success) {
+            const filteredRs = (rsResult.data.recentlySaved || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
+            await safeStorageOperation(
+              () => chrome.storage.local.set({ recentlySaved: filteredRs }),
+              "saving recently saved after rs delete"
+            );
+            renderRecentlySaved(filteredRs);
+          }
+          
+          loadTabs();
+          showMessage("Entry removed!", "success");
+        } catch (err) {
+          console.error("Error deleting recently saved entry:", err);
+        }
+      }
+    });
+  }
+});

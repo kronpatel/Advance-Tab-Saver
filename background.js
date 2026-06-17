@@ -1,12 +1,63 @@
 // Tab Saver Pro
 // Copyright (c) 2025 KERZOX. All rights reserved.
 
+// Normalize URL for robust duplicate comparison
+function normalizeUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return "";
+  try {
+    const url = new URL(urlStr);
+    let pathname = url.pathname;
+    if (pathname.endsWith("/") && pathname.length > 1) {
+      pathname = pathname.slice(0, -1);
+    }
+    const params = new URLSearchParams(url.search);
+    const trackingParams = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "ref"
+    ];
+    let changed = false;
+    trackingParams.forEach((param) => {
+      if (params.has(param)) {
+        params.delete(param);
+        changed = true;
+      }
+    });
+    const search = changed
+      ? params.toString()
+        ? "?" + params.toString()
+        : ""
+      : url.search;
+    return `${url.protocol}//${url.hostname}${url.port ? ":" + url.port : ""}${pathname}${search}${url.hash}`;
+  } catch (e) {
+    let cleaned = urlStr.trim();
+    if (cleaned.endsWith("/") && cleaned.length > 1) {
+      cleaned = cleaned.slice(0, -1);
+    }
+    return cleaned;
+  }
+}
+
 // Auto-save state
 let autoSaveEnabled = false;
 let autoSaveIdleTime = 120; // seconds
 let autoSaveShowNotification = true;
-let lastAutoSaveTime = 0;
-let idleStateListener = null;
+
+// Synchronously register the idle state change listener at the top level for MV3 reliability
+chrome.idle.onStateChanged.addListener(async (state) => {
+  console.log("Tab Saver Pro: Idle state changed to:", state);
+  try {
+    const result = await chrome.storage.local.get(["autoSaveEnabled"]);
+    if (result.autoSaveEnabled && state === "idle") {
+      await performAutoSave();
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error in idle state listener:", error);
+  }
+});
 
 // Initialize storage on install with error handling
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -21,6 +72,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         autoSaveEnabled: false,
         autoSaveIdleTime: 120,
         autoSaveShowNotification: true,
+        autoBackupSettings: {
+          enabled: false,
+          frequency: "daily",
+          maxBackups: 10,
+          lastBackupTime: 0
+        },
+        backupHistory: [],
+        recentlySaved: [],
       });
       console.log("Tab Saver Pro: Initial storage setup complete");
     } else if (details.reason === "update") {
@@ -37,6 +96,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         "autoSaveEnabled",
         "autoSaveIdleTime",
         "autoSaveShowNotification",
+        "autoBackupSettings",
+        "backupHistory",
+        "recentlySaved",
       ]);
 
       // Set defaults for missing values
@@ -59,6 +121,20 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       if (result.autoSaveShowNotification === undefined) {
         updates.autoSaveShowNotification = true;
       }
+      if (!result.autoBackupSettings) {
+        updates.autoBackupSettings = {
+          enabled: false,
+          frequency: "daily",
+          maxBackups: 10,
+          lastBackupTime: 0
+        };
+      }
+      if (!result.backupHistory) {
+        updates.backupHistory = [];
+      }
+      if (!result.recentlySaved) {
+        updates.recentlySaved = [];
+      }
 
       if (Object.keys(updates).length > 0) {
         await chrome.storage.local.set(updates);
@@ -77,6 +153,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         autoSaveEnabled: false,
         autoSaveIdleTime: 120,
         autoSaveShowNotification: true,
+        autoBackupSettings: {
+          enabled: false,
+          frequency: "daily",
+          maxBackups: 10,
+          lastBackupTime: 0
+        },
+        backupHistory: [],
+        recentlySaved: [],
       });
       console.log("Tab Saver Pro: Fallback storage setup complete");
     } catch (fallbackError) {
@@ -153,6 +237,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     updateAutoSaveSettings(request.settings);
     sendResponse({ success: true });
     return true;
+  } else if (request.action === "updateAutoBackupSettings") {
+    updateAutoBackupSettings(request.settings).then(() => {
+      sendResponse({ success: true });
+    }).catch((err) => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true;
+  } else if (request.action === "triggerManualBackup") {
+    performManualBackup().then((backup) => {
+      sendResponse({ success: true, backup });
+    }).catch((err) => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true;
   }
 });
 
@@ -198,77 +296,22 @@ async function initializeAutoSave() {
       showNotification: autoSaveShowNotification,
     });
 
-    // Set up idle detection if auto-save is enabled
     if (autoSaveEnabled) {
-      startIdleDetection();
+      chrome.idle.setDetectionInterval(autoSaveIdleTime);
     }
   } catch (error) {
     console.error("Tab Saver Pro: Error initializing auto-save:", error);
   }
 }
 
-// Start idle detection
-function startIdleDetection() {
-  try {
-    // Set up idle detection interval
-    chrome.idle.setDetectionInterval(autoSaveIdleTime);
-    
-    if (chrome.runtime.lastError) {
-      console.warn("Tab Saver Pro: Error setting idle detection interval:", chrome.runtime.lastError.message);
-      return;
-    }
-
-    // Remove the old listener if exists
-    if (idleStateListener) {
-      chrome.idle.onStateChanged.removeListener(idleStateListener);
-    }
-
-    // Add new listener
-    idleStateListener = async (state) => {
-      console.log("Tab Saver Pro: Idle state changed to:", state);
-      if (state === "idle" && autoSaveEnabled) {
-        await performAutoSave();
-      }
-    };
-
-    chrome.idle.onStateChanged.addListener(idleStateListener);
-    
-    if (chrome.runtime.lastError) {
-      console.warn("Tab Saver Pro: Error adding idle listener:", chrome.runtime.lastError.message);
-      return;
-    }
-
-    console.log(
-      "Tab Saver Pro: Idle detection started with interval:",
-      autoSaveIdleTime,
-      "seconds"
-    );
-  } catch (error) {
-    console.error("Tab Saver Pro: Error starting idle detection:", error);
-  }
-}
-
-// Stop the idle detection
-function stopIdleDetection() {
-  try {
-    if (idleStateListener) {
-      chrome.idle.onStateChanged.removeListener(idleStateListener);
-      if (chrome.runtime.lastError) {
-        console.warn("Tab Saver Pro: Error removing idle listener:", chrome.runtime.lastError.message);
-      }
-      idleStateListener = null;
-      console.log("Tab Saver Pro: Idle detection stopped");
-    }
-  } catch (error) {
-    console.error("Tab Saver Pro: Error stopping idle detection:", error);
-  }
-}
-
 // Perform auto-save
 async function performAutoSave() {
   try {
-    // Prevent duplicate saves within a short period
     const now = Date.now();
+
+    // Prevent duplicate saves within a short period, persisting cooldown in local storage
+    const cooldownResult = await chrome.storage.local.get(["lastAutoSaveTime"]);
+    const lastAutoSaveTime = cooldownResult.lastAutoSaveTime || 0;
 
     if (now - lastAutoSaveTime < 30000) {
       // 30 seconds minimum between auto-saves
@@ -312,25 +355,33 @@ async function performAutoSave() {
 
     let added = 0;
     const newTabs = [...savedTabs];
+    const addedTabsList = [];
 
-    // Process each tab
+    // Process each tab using normalized URL comparison to prevent duplicates
     for (const tab of tabs) {
       const sanitizedTab = sanitizeTabData(tab);
-      if (sanitizedTab && !newTabs.find((t) => t.url === sanitizedTab.url)) {
-        newTabs.push(sanitizedTab);
-        added++;
+      if (sanitizedTab) {
+        const normalizedSanitized = normalizeUrl(sanitizedTab.url);
+        if (!newTabs.find((t) => normalizeUrl(t.url) === normalizedSanitized)) {
+          newTabs.push(sanitizedTab);
+          addedTabsList.push(sanitizedTab);
+          added++;
+        }
       }
     }
 
     // Save if we added any new tabs
     if (added > 0) {
       try {
-        await chrome.storage.local.set({ savedTabs: newTabs });
+        await chrome.storage.local.set({ 
+          savedTabs: newTabs,
+          lastAutoSaveTime: now
+        });
+        await updateRecentlySaved(addedTabsList);
         if (chrome.runtime.lastError) {
           console.warn("Tab Saver Pro: Error saving tabs:", chrome.runtime.lastError.message);
           return;
         }
-        lastAutoSaveTime = now;
 
         console.log(`Tab Saver Pro: Auto-saved ${added} new tab(s)`);
 
@@ -423,11 +474,8 @@ async function updateAutoSaveSettings(settings) {
       showNotification: autoSaveShowNotification,
     });
 
-    // Start or stop idle detection based on settings
     if (autoSaveEnabled) {
-      startIdleDetection();
-    } else {
-      stopIdleDetection();
+      chrome.idle.setDetectionInterval(autoSaveIdleTime);
     }
   } catch (error) {
     console.error("Tab Saver Pro: Error updating auto-save settings:", error);
@@ -523,3 +571,189 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     console.error("Tab Saver Pro: Error in storage.onChanged handler:", error);
   }
 });
+
+// ======= Auto-Backup and Recently Saved Support =======
+
+// Synchronously register the alarm listener at the top-level scope
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === "autoBackupAlarm") {
+    console.log("Tab Saver Pro: Alarm autoBackupAlarm triggered");
+    await checkAndPerformAutoBackup();
+  }
+});
+
+// Initialize auto-backup alarm
+async function initializeAutoBackupAlarm() {
+  try {
+    const result = await chrome.storage.local.get(["autoBackupSettings"]);
+    const settings = result.autoBackupSettings || {
+      enabled: false,
+      frequency: "daily",
+      maxBackups: 10,
+      lastBackupTime: 0
+    };
+    
+    await chrome.alarms.clear("autoBackupAlarm");
+    
+    if (settings.enabled) {
+      // Run every 60 minutes to check if backup threshold has passed
+      chrome.alarms.create("autoBackupAlarm", { periodInMinutes: 60 });
+      console.log("Tab Saver Pro: Scheduled auto backup alarm (60 min check interval)");
+      
+      // Perform immediate check on startup in case scheduling was missed
+      await checkAndPerformAutoBackup();
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error initializing auto backup alarm:", error);
+  }
+}
+
+// Update auto-backup settings
+async function updateAutoBackupSettings(settings) {
+  try {
+    const result = await chrome.storage.local.get(["autoBackupSettings"]);
+    const current = result.autoBackupSettings || {};
+    const updated = { ...current, ...settings };
+    
+    await chrome.storage.local.set({ autoBackupSettings: updated });
+    console.log("Tab Saver Pro: Auto-backup settings updated", updated);
+    
+    await initializeAutoBackupAlarm();
+  } catch (error) {
+    console.error("Tab Saver Pro: Error updating auto-backup settings:", error);
+    throw error;
+  }
+}
+
+// Check and perform scheduled auto backup
+async function checkAndPerformAutoBackup() {
+  try {
+    const result = await chrome.storage.local.get(["autoBackupSettings", "savedTabs", "savedSessions", "backupHistory"]);
+    const settings = result.autoBackupSettings || {
+      enabled: false,
+      frequency: "daily",
+      maxBackups: 10,
+      lastBackupTime: 0
+    };
+    
+    if (!settings.enabled) return;
+    
+    const now = Date.now();
+    const lastBackup = settings.lastBackupTime || 0;
+    const interval = settings.frequency === "weekly" 
+      ? 7 * 24 * 60 * 60 * 1000 
+      : 24 * 60 * 60 * 1000;
+      
+    if (now - lastBackup >= interval) {
+      await performBackup(result.savedTabs || [], result.savedSessions || [], settings, result.backupHistory || []);
+    }
+  } catch (error) {
+    console.error("Tab Saver Pro: Error checking auto backup:", error);
+  }
+}
+
+// Perform backup core logic
+async function performBackup(savedTabs, savedSessions, settings, backupHistory) {
+  try {
+    const now = Date.now();
+    const newBackup = {
+      backupId: now,
+      createdAt: new Date().toISOString(),
+      tabCount: savedTabs.length,
+      sessionCount: savedSessions.length,
+      backupData: { savedTabs, savedSessions }
+    };
+    
+    const maxBackups = parseInt(settings.maxBackups, 10) || 10;
+    const updatedHistory = [newBackup, ...backupHistory].slice(0, maxBackups);
+    
+    settings.lastBackupTime = now;
+    
+    await chrome.storage.local.set({
+      backupHistory: updatedHistory,
+      autoBackupSettings: settings
+    });
+    
+    console.log("Tab Saver Pro: Scheduled auto backup created successfully at", new Date(now).toLocaleString());
+  } catch (error) {
+    console.error("Tab Saver Pro: Error performing auto backup:", error);
+  }
+}
+
+// Perform manual backup
+async function performManualBackup() {
+  try {
+    const result = await chrome.storage.local.get(["autoBackupSettings", "savedTabs", "savedSessions", "backupHistory"]);
+    const settings = result.autoBackupSettings || {
+      enabled: false,
+      frequency: "daily",
+      maxBackups: 10,
+      lastBackupTime: 0
+    };
+    
+    const now = Date.now();
+    const newBackup = {
+      backupId: now,
+      createdAt: new Date().toISOString(),
+      tabCount: (result.savedTabs || []).length,
+      sessionCount: (result.savedSessions || []).length,
+      backupData: { 
+        savedTabs: result.savedTabs || [], 
+        savedSessions: result.savedSessions || [] 
+      }
+    };
+    
+    const maxBackups = parseInt(settings.maxBackups, 10) || 10;
+    const backupHistory = result.backupHistory || [];
+    const updatedHistory = [newBackup, ...backupHistory].slice(0, maxBackups);
+    
+    settings.lastBackupTime = now;
+    
+    await chrome.storage.local.set({
+      backupHistory: updatedHistory,
+      autoBackupSettings: settings
+    });
+    
+    console.log("Tab Saver Pro: Manual backup created successfully");
+    return newBackup;
+  } catch (error) {
+    console.error("Tab Saver Pro: Error performing manual backup:", error);
+    throw error;
+  }
+}
+
+// Update recently saved list
+async function updateRecentlySaved(newTabs) {
+  if (!newTabs || newTabs.length === 0) return;
+  try {
+    const result = await chrome.storage.local.get(["recentlySaved"]);
+    const current = result.recentlySaved || [];
+    
+    const formattedNew = newTabs.map(t => ({
+      title: t.title || "Untitled",
+      url: t.url,
+      favicon: t.favicon || "",
+      savedAt: t.savedAt || Date.now()
+    }));
+    
+    let merged = [...formattedNew, ...current];
+    
+    const unique = [];
+    const seenUrls = new Set();
+    for (const item of merged) {
+      const norm = normalizeUrl(item.url);
+      if (!seenUrls.has(norm)) {
+        seenUrls.add(norm);
+        unique.push(item);
+      }
+    }
+    
+    const finalRecentlySaved = unique.slice(0, 10);
+    await chrome.storage.local.set({ recentlySaved: finalRecentlySaved });
+  } catch (error) {
+    console.error("Tab Saver Pro: Error updating recently saved tabs:", error);
+  }
+}
+
+// Initialize alarm on startup
+initializeAutoBackupAlarm();
