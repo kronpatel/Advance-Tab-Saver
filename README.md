@@ -4,11 +4,14 @@
 
 [![GitHub Tag](https://img.shields.io/github/v/tag/kronpatel/Advance-Tab-Saver?style=for-the-badge&label=Release&color=blue)](https://github.com/kronpatel/Advance-Tab-Saver/releases)
 [![GitHub Stars](https://img.shields.io/github/stars/kronpatel/Advance-Tab-Saver?style=for-the-badge&color=gold)](https://github.com/kronpatel/Advance-Tab-Saver/stargazers)
-[![Coming Soon on Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Coming%20Soon-blue?logo=google-chrome&style=for-the-badge)](#)
+*Chrome Web Store Release Planned*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-See the [Changelog](./CHANGELOG.md) for release notes.
+## 📋 Release Notes
+
+View the full release history and feature updates in the [CHANGELOG.md](CHANGELOG.md).
+
 
 ---
 
@@ -70,17 +73,11 @@ Version `3.0.0` is a major upgrade introducing massive productivity improvements
 
 ## 🦊 Experimental Firefox Support
 
-While **Tab Saver Pro** fully supports Google Chrome, support for Mozilla Firefox is currently **experimental**. Active testing is ongoing to ensure full compatibility.
+Firefox support is currently experimental.
 
-To run the extension in Firefox, you can load it manually using the Firefox-compatible manifest:
+Advanced users can load the Firefox-compatible manifest when testing the extension in Mozilla Firefox.
 
-1. **Download and Extract**: Download the source code ZIP and extract it to a directory on your computer.
-2. **Prepare the Manifest**: Copy or rename `manifest.firefox.json` to `manifest.json` in the root folder (replacing the default Chrome manifest).
-3. **Open Firefox Debugging**: Open Mozilla Firefox and navigate to `about:debugging`.
-4. **Go to This Firefox**: Click on **"This Firefox"** in the left sidebar.
-5. **Load Temporary Add-on**: Click the **"Load Temporary Add-on..."** button.
-6. **Select Manifest**: Select the newly created/renamed `manifest.json` file.
-7. **Open Extension**: The extension will load temporarily. You can access it by clicking the puzzle/extension icon in the Firefox toolbar.
+Additional compatibility testing is ongoing.
 
 
 
