@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Backup Restore Support (overwriting active tabs/sessions dynamically).
 - Recently Saved Widget (statistics panel showing latest bookmarks with copy/restore/delete buttons).
 - Restore Preview Dialog (side-by-side database metric comparisons before confirming restore).
+- Experimental Firefox Support (including manual debugging/installation instructions).
+- Separate Firefox manifest (`manifest.firefox.json` with background scripts and Gecko settings).
 
 ### Improved
 - Auto Save Reliability (optimized idle state listener for Manifest V3).
@@ -19,6 +21,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Manifest V3 background service worker cold start issues and message delivery.
 - Inconsistent duplicate detection checks.
+- Chrome MV3 background scripts warning (`background.scripts` validation issue resolved).
 
 ## [3.0.0] - 2026-06-12
 

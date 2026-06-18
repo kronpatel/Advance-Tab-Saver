@@ -430,7 +430,8 @@ function sanitizeTabData(tab) {
     tab.url.startsWith("chrome://") ||
     tab.url.startsWith("chrome-extension://") ||
     tab.url.startsWith("edge://") ||
-    tab.url === "about:blank"
+    tab.url.startsWith("moz-extension://") ||
+    tab.url.startsWith("about:")
   ) {
     return null;
   }

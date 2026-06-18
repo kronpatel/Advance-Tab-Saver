@@ -68,6 +68,21 @@ Version `3.0.0` is a major upgrade introducing massive productivity improvements
 4. **Load Unpacked**: Click the **Load unpacked** button in the top-left corner and select the extracted folder (containing `manifest.json`).
 5. **Pin the Extension**: Click the Extensions (puzzle piece) icon in your toolbar, pin **Tab Saver Pro**, and open it.
 
+## 🦊 Experimental Firefox Support
+
+While **Tab Saver Pro** fully supports Google Chrome, support for Mozilla Firefox is currently **experimental**. Active testing is ongoing to ensure full compatibility.
+
+To run the extension in Firefox, you can load it manually using the Firefox-compatible manifest:
+
+1. **Download and Extract**: Download the source code ZIP and extract it to a directory on your computer.
+2. **Prepare the Manifest**: Copy or rename `manifest.firefox.json` to `manifest.json` in the root folder (replacing the default Chrome manifest).
+3. **Open Firefox Debugging**: Open Mozilla Firefox and navigate to `about:debugging`.
+4. **Go to This Firefox**: Click on **"This Firefox"** in the left sidebar.
+5. **Load Temporary Add-on**: Click the **"Load Temporary Add-on..."** button.
+6. **Select Manifest**: Select the newly created/renamed `manifest.json` file.
+7. **Open Extension**: The extension will load temporarily. You can access it by clicking the puzzle/extension icon in the Firefox toolbar.
+
+
 
 
 ## 🔮 Future Improvements
