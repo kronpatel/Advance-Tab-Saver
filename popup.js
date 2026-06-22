@@ -377,21 +377,36 @@ function showMessage(msg, type = "info", duration = 3000) {
 }
 
 // ======= Error Handling & Validation Utilities =======
+function checkFileSchemeAccess(callback) {
+  try {
+    const extAPI = typeof chrome !== "undefined" ? chrome : (typeof browser !== "undefined" ? browser : null);
+    if (extAPI && extAPI.extension && typeof extAPI.extension.isAllowedFileSchemeAccess === "function") {
+      extAPI.extension.isAllowedFileSchemeAccess((isAllowed) => {
+        callback(!!isAllowed);
+      });
+    } else {
+      callback(false);
+    }
+  } catch (e) {
+    console.error("Error checking file scheme access:", e);
+    callback(false);
+  }
+}
+
 function isValidUrl(string) {
   try {
     const url = new URL(string);
-    // Allow common web protocols and browser internal URLs
-    const allowedProtocols = [
-      "http:",
-      "https:",
-      "chrome:",
-      "chrome-extension:",
-      "moz-extension:",
-      "about:",
-      "file:",
-      "ftp:",
-    ];
-    return allowedProtocols.includes(url.protocol);
+    // Explicitly restrict to safe web protocols, file support, and safe placeholder
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return true;
+    }
+    if (url.protocol === "file:") {
+      return true;
+    }
+    if (url.protocol === "about:") {
+      return url.href === "about:blank";
+    }
+    return false;
   } catch (_) {
     return false;
   }
@@ -407,17 +422,9 @@ function isValidTab(tab) {
     return false;
   }
 
-  // More permissive URL validation - accept any URL with a protocol
-  // or any string that looks like a URL
-  return (
-    isValidUrl(tab.url) ||
-    tab.url.includes("://") ||
-    tab.url.startsWith("chrome://") ||
-    tab.url.startsWith("about:") ||
-    tab.url.startsWith("file://") ||
-    tab.url.startsWith("data:")
-  );
+  return isValidUrl(tab.url);
 }
+
 
 function sanitizeTabData(tab) {
   if (!tab) return null;
@@ -768,6 +775,21 @@ tabList.addEventListener("click", async (e) => {
       const url = e.target.closest(".open").dataset.url;
       if (!isValidUrl(url)) {
         showMessage("Invalid URL cannot be opened", "warning");
+        return;
+      }
+      if (url.startsWith("file://")) {
+        checkFileSchemeAccess((isAllowed) => {
+          if (!isAllowed) {
+            showMessage("Enable 'Allow access to file URLs' in extension settings to open local files.", "warning", 5000);
+            return;
+          }
+          chrome.tabs.create({ url }).then(() => {
+            showMessage("Tab opened!", "success");
+          }).catch((error) => {
+            console.error("Error opening tab:", error);
+            showMessage("Failed to open tab. Please try again.", "warning");
+          });
+        });
         return;
       }
       try {
@@ -1196,11 +1218,13 @@ function setupSaveSessionModalHandlers() {
           }
         } catch (e) {}
 
+        const sanitizedTabs = (tabs || []).map(sanitizeTabData).filter(t => t !== null);
+
         const session = {
           id: Date.now(),
           name,
           category: selectedCategory,
-          tabs,
+          tabs: sanitizedTabs,
           createdAt: new Date().toISOString(),
         };
 
@@ -1350,10 +1374,14 @@ async function restoreSession(id) {
       });
 
       if (response && response.success) {
-        if (response.failCount === 0) {
-          showMessage(`Successfully restored all ${response.successCount} tabs!`, "success");
-        } else {
+        let msg = `Successfully restored all ${response.successCount} tabs!`;
+        if (response.skippedFileCount > 0) {
+          msg = `Restored ${response.successCount} tabs. ${response.skippedFileCount} local files skipped. Enable 'Allow access to file URLs' in extension settings to restore them.`;
+          showMessage(msg, "warning", 6000);
+        } else if (response.failCount > 0) {
           showMessage(`Restored ${response.successCount} tabs, ${response.failCount} failed`, "warning");
+        } else {
+          showMessage(msg, "success");
         }
       } else {
         showMessage("Failed to restore session.", "warning");
@@ -1429,16 +1457,14 @@ openAllBtn.onclick = async () => {
     });
 
     if (response && response.success) {
-      if (response.failCount === 0) {
-        showMessage(
-          `Successfully opened all ${response.successCount} tabs!`,
-          "success"
-        );
+      let msg = `Successfully opened all ${response.successCount} tabs!`;
+      if (response.skippedFileCount > 0) {
+        msg = `Opened ${response.successCount} tabs. ${response.skippedFileCount} local files skipped. Enable 'Allow access to file URLs' in extension settings to restore them.`;
+        showMessage(msg, "warning", 6000);
+      } else if (response.failCount > 0) {
+        showMessage(`Opened ${response.successCount} tabs, ${response.failCount} failed`, "warning");
       } else {
-        showMessage(
-          `Opened ${response.successCount} tabs, ${response.failCount} failed`,
-          "warning"
-        );
+        showMessage(msg, "success");
       }
     } else {
       showMessage("Failed to open tabs. Please try again.", "warning");
@@ -2006,10 +2032,14 @@ async function bulkOpenSelected() {
   });
 
   if (response && response.success) {
-    if (response.failCount === 0) {
-      showMessage(`Successfully opened all ${response.successCount} tabs!`, "success");
-    } else {
+    let msg = `Successfully opened all ${response.successCount} tabs!`;
+    if (response.skippedFileCount > 0) {
+      msg = `Opened ${response.successCount} tabs. ${response.skippedFileCount} local files skipped. Enable 'Allow access to file URLs' in extension settings to restore them.`;
+      showMessage(msg, "warning", 6000);
+    } else if (response.failCount > 0) {
       showMessage(`Opened ${response.successCount} tabs, ${response.failCount} failed`, "warning");
+    } else {
+      showMessage(msg, "success");
     }
   } else {
     showMessage("Failed to open tabs.", "warning");
@@ -2629,8 +2659,19 @@ document.addEventListener("DOMContentLoaded", () => {
       
       confirmRestorePreviewBtn.disabled = true;
       try {
-        const savedTabs = backup.backupData.savedTabs || [];
-        const savedSessions = backup.backupData.savedSessions || [];
+        const savedTabs = (backup.backupData.savedTabs || [])
+          .map(sanitizeTabData)
+          .filter(t => t !== null);
+          
+        const savedSessions = (backup.backupData.savedSessions || []).map(session => {
+          const validSessionTabs = (session.tabs || [])
+            .map(sanitizeTabData)
+            .filter(t => t !== null);
+          return {
+            ...session,
+            tabs: validSessionTabs
+          };
+        });
         
         await chrome.storage.local.set({ savedTabs, savedSessions });
         
@@ -2665,6 +2706,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const url = btn.dataset.url;
       if (btn.classList.contains("rs-open")) {
         if (isValidUrl(url)) {
+          if (url.startsWith("file://")) {
+            checkFileSchemeAccess((isAllowed) => {
+              if (!isAllowed) {
+                showMessage("Enable 'Allow access to file URLs' in extension settings to open local files.", "warning", 5000);
+                return;
+              }
+              chrome.tabs.create({ url });
+              showMessage("Tab opened!", "success");
+            });
+            return;
+          }
           chrome.tabs.create({ url });
           showMessage("Tab opened!", "success");
         } else {

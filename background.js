@@ -1,6 +1,42 @@
 // Tab Saver Pro
 // Copyright (c) 2025 KERZOX. All rights reserved.
 
+function checkFileSchemeAccess(callback) {
+  try {
+    const extAPI = typeof chrome !== "undefined" ? chrome : (typeof browser !== "undefined" ? browser : null);
+    if (extAPI && extAPI.extension && typeof extAPI.extension.isAllowedFileSchemeAccess === "function") {
+      extAPI.extension.isAllowedFileSchemeAccess((isAllowed) => {
+        callback(!!isAllowed);
+      });
+    } else {
+      callback(false);
+    }
+  } catch (e) {
+    console.error("Error checking file scheme access:", e);
+    callback(false);
+  }
+}
+
+function isValidUrl(string) {
+  try {
+    const url = new URL(string);
+    // Explicitly restrict to safe web protocols, file support, and safe placeholder
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return true;
+    }
+    if (url.protocol === "file:") {
+      return true;
+    }
+    if (url.protocol === "about:") {
+      return url.href === "about:blank";
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+
 // Normalize URL for robust duplicate comparison
 function normalizeUrl(urlStr) {
   if (!urlStr || typeof urlStr !== "string") return "";
@@ -183,52 +219,70 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.tabs.length
     );
 
-    // Open tabs from background script (has fewer restrictions)
-    const openPromises = request.tabs.map(async (tab, index) => {
-      try {
-        console.log(`Background: Opening tab ${index + 1}: ${tab.title}`);
-        
-        // Validate URL before attempting to open
-        if (!tab.url || typeof tab.url !== 'string' || tab.url.length === 0) {
-          console.warn(`Background: Invalid URL for tab ${index + 1}:`, tab.url);
-          return { success: false, error: "Invalid URL", tab };
-        }
+    checkFileSchemeAccess((fileAccessAllowed) => {
+      let skippedFileCount = 0;
 
-        const createdTab = await chrome.tabs.create({ url: tab.url });
-        
-        if (chrome.runtime.lastError) {
-          console.warn(`Background: Tab creation error for tab ${index + 1}:`, chrome.runtime.lastError.message);
-          return { success: false, error: chrome.runtime.lastError.message, tab };
+      // Open tabs from background script (has fewer restrictions)
+      const openPromises = request.tabs.map(async (tab, index) => {
+        try {
+          console.log(`Background: Opening tab ${index + 1}: ${tab.title}`);
+          
+          // Validate URL before attempting to open
+          if (!tab.url || typeof tab.url !== 'string' || tab.url.length === 0) {
+            console.warn(`Background: Invalid URL for tab ${index + 1}:`, tab.url);
+            return { success: false, error: "Invalid URL", tab };
+          }
+
+          // Strict runtime protocol check
+          if (!isValidUrl(tab.url)) {
+            console.warn(`Background: Blocked unsafe protocol from opening:`, tab.url);
+            return { success: false, error: "Blocked unsafe URL protocol", tab };
+          }
+
+          // Block file scheme if extension lacks file scheme privileges
+          if (tab.url.startsWith("file://") && !fileAccessAllowed) {
+            skippedFileCount++;
+            console.warn(`Background: Skipped file:// URL during bulk restoration:`, tab.url);
+            return { success: false, error: "Local file access disabled", tab };
+          }
+
+          const createdTab = await chrome.tabs.create({ url: tab.url });
+          
+          if (chrome.runtime.lastError) {
+            console.warn(`Background: Tab creation error for tab ${index + 1}:`, chrome.runtime.lastError.message);
+            return { success: false, error: chrome.runtime.lastError.message, tab };
+          }
+
+          console.log(
+            `Background: Successfully opened tab ${index + 1} with ID: ${
+              createdTab.id
+            }`
+          );
+          return { success: true, tab, createdTab };
+        } catch (error) {
+          console.error(`Background: Failed to open tab ${index + 1}:`, error);
+          return { success: false, error: error.message, tab };
         }
+      });
+
+      Promise.allSettled(openPromises).then((results) => {
+        const successCount = results.filter(
+          (r) => r.status === "fulfilled" && r.value.success
+        ).length;
+        const failCount = results.length - successCount - skippedFileCount;
 
         console.log(
-          `Background: Successfully opened tab ${index + 1} with ID: ${
-            createdTab.id
-          }`
+          `Background: Tab opening complete: ${successCount} success, ${failCount} failed, ${skippedFileCount} skipped`
         );
-        return { success: true, tab, createdTab };
-      } catch (error) {
-        console.error(`Background: Failed to open tab ${index + 1}:`, error);
-        return { success: false, error: error.message, tab };
-      }
-    });
 
-    Promise.allSettled(openPromises).then((results) => {
-      const successCount = results.filter(
-        (r) => r.status === "fulfilled" && r.value.success
-      ).length;
-      const failCount = results.length - successCount;
-
-      console.log(
-        `Background: Tab opening complete: ${successCount} success, ${failCount} failed`
-      );
-
-      // Send results back to popup
-      sendResponse({
-        success: true,
-        results: results,
-        successCount: successCount,
-        failCount: failCount,
+        // Send results back to popup
+        sendResponse({
+          success: true,
+          results: results,
+          successCount: successCount,
+          failCount: failCount,
+          skippedFileCount: skippedFileCount
+        });
       });
     });
 
@@ -426,13 +480,7 @@ function sanitizeTabData(tab) {
   }
 
   // Skip chrome:// and other internal URLs
-  if (
-    tab.url.startsWith("chrome://") ||
-    tab.url.startsWith("chrome-extension://") ||
-    tab.url.startsWith("edge://") ||
-    tab.url.startsWith("moz-extension://") ||
-    tab.url.startsWith("about:")
-  ) {
+  if (!isValidUrl(tab.url)) {
     return null;
   }
 
