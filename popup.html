@@ -75,7 +75,7 @@
           </div>
           <div class="ag-stat-divider"></div>
           <div class="ag-stat-item">
-            <div class="ag-stat-value" id="totalTabs">0 Total</div>
+            <div class="ag-stat-value" id="totalTabs">Total saved: 0</div>
           </div>
         </div>
         <button class="ag-export-link" id="exportBtn">
@@ -114,6 +114,7 @@
         id="actionsContent"
         role="tabpanel"
         aria-labelledby="actionsTab"
+        tabindex="0"
       >
         <!-- Quick Actions -->
         <div class="section">
@@ -268,6 +269,7 @@
         style="display: none"
         role="tabpanel"
         aria-labelledby="statsTab"
+        tabindex="0"
       >
         <section class="ag-stats-section">
           <h3 class="ag-section-title">Storage Dashboard</h3>
@@ -351,14 +353,14 @@
 
       <!-- Footer -->
       <footer class="ag-footer">
-        <span>Tab Saver Pro &copy; 2025 KERZOX. All rights reserved.</span>
+        <span>Tab Saver Pro &copy; 2025–2026 KERZOX. All rights reserved.</span>
       </footer>
     </main>
 
     <!-- Settings Modal -->
-    <dialog id="settingsModal" class="ag-dialog">
+    <dialog id="settingsModal" class="ag-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <div class="ag-dialog-header">
-        <h3 class="ag-dialog-title">Settings</h3>
+        <h3 class="ag-dialog-title" id="settingsTitle">Settings</h3>
         <button
           class="ag-dialog-close"
           id="closeSettingsBtn"
@@ -498,9 +500,9 @@
     </dialog>
 
     <!-- Save All Mode Modal -->
-    <div id="saveAllModeModal" class="modal hidden">
+    <div id="saveAllModeModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveAllTitle">
       <div class="modal-content" style="max-width: 340px;">
-        <h2>Save All Tabs</h2>
+        <h2 id="saveAllTitle">Save All Tabs</h2>
         <p id="saveAllCountMessage" style="font-size: 13px; color: var(--text-primary); margin-bottom: 16px; font-weight: 500; line-height: 1.4;">
           You currently have 0 open tabs. Choose how you want to save them.
         </p>
@@ -524,10 +526,10 @@
     </div>
 
     <!-- Save Session Modal -->
-    <div id="saveSessionModal" class="modal hidden">
+    <div id="saveSessionModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="saveSessionTitle">
       <div class="modal-content">
-        <h2>Save current session</h2>
-        <input type="text" id="sessionNameInput" placeholder="Enter session name...">
+        <h2 id="saveSessionTitle">Save current session</h2>
+        <input type="text" id="sessionNameInput" placeholder="Enter session name..." maxlength="100">
         <p id="sessionNameError" class="error-text hidden">Please enter a name.</p>
         
         <div class="ag-form-group" style="margin-bottom: 16px;">
@@ -560,9 +562,9 @@
     </div>
 
     <!-- Restore Preview Modal -->
-    <div id="restorePreviewModal" class="modal hidden">
+    <div id="restorePreviewModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="restorePreviewTitle">
       <div class="modal-content" style="max-width: 380px;">
-        <h2>Restore Backup</h2>
+        <h2 id="restorePreviewTitle">Restore Backup</h2>
         
         <div class="ag-form-group" style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px;">
           <h4 style="font-size: 11px; text-transform: uppercase; color: var(--accent-primary); margin: 0 0 8px 0; letter-spacing: 0.5px;">Backup Information</h4>
@@ -601,9 +603,7 @@
             <span class="material-icons" style="font-size: 18px;">warning</span>
             <span>Data Loss Warning</span>
           </div>
-          <p id="rpWarningText" style="font-size: 11px; color: var(--text-primary); line-height: 1.4; margin: 0;">
-            Restoring this backup will replace your current saved tabs and sessions. You may lose 55 saved tabs.
-          </p>
+          <p id="rpWarningText" style="font-size: 11px; color: var(--text-primary); line-height: 1.4; margin: 0;"></p>
         </div>
 
         <div id="rpInfoContainer" style="background: rgba(139, 231, 139, 0.05); border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 12px; margin-bottom: 20px; display: block; font-size: 11px; line-height: 1.4; color: var(--text-secondary);">
@@ -615,8 +615,19 @@
           <button id="confirmRestorePreviewBtn" class="btn save">Restore Backup</button>
         </div>
       </div>
+    <!-- Custom Confirm Modal -->
+    <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <div class="modal-content" style="max-width: 320px;">
+        <h2 id="confirmTitle" style="margin: 0 0 10px; font-size: 1.15em; font-weight: 700; color: var(--accent-primary);">Confirm Action</h2>
+        <p id="confirmMessage" style="font-size: 13px; line-height: 1.5; color: var(--text-primary); margin: 0 0 20px;"></p>
+        <div class="modal-actions">
+          <button id="cancelConfirmBtn" class="btn cancel">Cancel</button>
+          <button id="okConfirmBtn" class="btn save">Confirm</button>
+        </div>
+      </div>
     </div>
 
+    <script src="shared.js"></script>
     <script src="config.js"></script>
     <script src="popup.js"></script>
   </body>

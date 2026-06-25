@@ -1654,7 +1654,238 @@ html[data-font-size="16px"] body {
   background: var(--accent-hover);
 }
 
+.btn.danger {
+  background: var(--danger-color);
+  color: #ffffff;
+}
+
+.btn.danger:hover {
+  background: var(--danger-hover);
+}
+
 .btn.save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Custom Confirmation Modal Overlay (Phase 11) */
+.modal#confirmModal,
+.ag-confirm-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.65); /* Slate-based dark overlay for visual balance and fallback contrast without blur */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px); /* Safari/WebKit support */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Stacks exactly above standard modals (z-index: 999) */
+  animation: agModalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal#confirmModal.hidden,
+.ag-confirm-modal-overlay.hidden {
+  display: none;
+  pointer-events: none;
+}
+
+/* Custom Confirmation Modal Content styling */
+.modal#confirmModal .modal-content,
+.ag-confirm-modal {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  width: 320px;
+  padding: 24px !important; /* Overrides inline HTML padding style */
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.1);
+  max-width: calc(100% - 40px) !important; /* Overrides inline HTML max-width style */
+  animation: agModalScaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Spring scale and slide animation */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Modal Content Title and Text spacing */
+.modal#confirmModal #confirmTitle,
+.ag-confirm-modal h2 {
+  margin: 0 0 8px !important; /* Overrides inline HTML margins */
+  font-size: 16px !important; /* Overrides inline HTML font size for visual balance */
+  font-weight: 700 !important;
+  color: var(--accent-primary) !important; /* Overrides inline HTML colors to fit current theme */
+}
+
+.modal#confirmModal #confirmMessage,
+.ag-confirm-modal p {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  color: var(--text-secondary) !important; /* Use text-secondary for softer visual hierarchy */
+  margin: 0 0 20px !important; /* Overrides inline HTML margins */
+}
+
+/* Modal Actions button area */
+.modal#confirmModal .modal-actions,
+.ag-confirm-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Button overrides specific to confirm modal */
+.modal#confirmModal .btn,
+.ag-confirm-modal .btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  border: none;
+  min-height: 36px;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Button interactive states (when enabled) */
+.modal#confirmModal .btn:hover:not(:disabled),
+.ag-confirm-modal .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.modal#confirmModal .btn:active:not(:disabled),
+.ag-confirm-modal .btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.modal#confirmModal .btn.cancel,
+.ag-confirm-modal .btn.cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.modal#confirmModal .btn.cancel:hover:not(:disabled),
+.ag-confirm-modal .btn.cancel:hover:not(:disabled) {
+  background: var(--border-color);
+}
+
+.modal#confirmModal .btn.save,
+.ag-confirm-modal .btn.save {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+}
+
+.modal#confirmModal .btn.save:hover:not(:disabled),
+.ag-confirm-modal .btn.save:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.modal#confirmModal .btn.danger,
+.ag-confirm-modal .btn.danger {
+  background: var(--danger-color);
+  color: #ffffff;
+}
+
+.modal#confirmModal .btn.danger:hover:not(:disabled),
+.ag-confirm-modal .btn.danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+}
+
+/* Focus states (focus-visible) */
+.modal#confirmModal .btn:focus-visible,
+.ag-confirm-modal .btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(139, 231, 139, 0.25);
+}
+
+.modal#confirmModal .btn.danger:focus-visible,
+.ag-confirm-modal .btn.danger:focus-visible {
+  outline: 2px solid var(--danger-color);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25);
+}
+
+.modal#confirmModal .btn.cancel:focus-visible,
+.ag-confirm-modal .btn.cancel:focus-visible {
+  outline: 2px solid var(--text-secondary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+/* Disabled state */
+.modal#confirmModal .btn:disabled,
+.ag-confirm-modal .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Animation Keyframes for Confirm Modal */
+@keyframes agModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes agModalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .modal#confirmModal,
+  .ag-confirm-modal-overlay,
+  .modal#confirmModal .modal-content,
+  .ag-confirm-modal,
+  .modal#confirmModal .btn,
+  .ag-confirm-modal .btn {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Accessibility & Button State Improvements (Phase 11) */
+.btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(139, 231, 139, 0.25);
+}
+
+.btn.danger:focus-visible {
+  outline: 2px solid var(--danger-color);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25);
+}
+
+.btn.cancel:focus-visible {
+  outline: 2px solid var(--text-secondary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+/* Disabled button state */
+.btn.danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn.cancel:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

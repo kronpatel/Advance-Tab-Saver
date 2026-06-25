@@ -17,3 +17,11 @@ yarn-debug.log*
 # Extension packaging
 *.zip
 *.crx
+
+# Temporary/backup files
+*.tmp
+*.bak
+*.old
+*.orig
+Desktop.ini
+

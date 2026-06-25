@@ -1,112 +1,108 @@
-# Advance-Tab-Saver
+# Tab Saver Pro
 
-**Advance Tab Saver** is a modern productivity-focused Chrome extension for saving, organizing, categorizing, restoring, and managing browser tabs and sessions with favorites, bulk actions, duplicate detection, and JSON backup support.
+**Tab Saver Pro** is a modern, privacy-focused browser extension for Chrome and Firefox designed to save, organize, categorize, restore, and manage your tabs and sessions. Features include daily/weekly automatic backups with rotation, dashboard analytics, search indexing, smart duplicate tab cleaner, custom session categorization, and visual theme options.
 
-[![GitHub Tag](https://img.shields.io/github/v/tag/kronpatel/Advance-Tab-Saver?style=for-the-badge&label=Release&color=blue)](https://github.com/kronpatel/Advance-Tab-Saver/releases)
-[![GitHub Stars](https://img.shields.io/github/stars/kronpatel/Advance-Tab-Saver?style=for-the-badge&color=gold)](https://github.com/kronpatel/Advance-Tab-Saver/stargazers)
-*Chrome Web Store Release Planned*
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-## 📋 Release Notes
-
-View the full release history and feature updates in the [CHANGELOG.md](CHANGELOG.md).
-
+[![Version](https://img.shields.io/badge/Release-v3.2.0-blue.svg?style=for-the-badge)](https://github.com/kronpatel/Advance-Tab-Saver/releases)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Ready-green.svg?style=for-the-badge)](https://chrome.google.com/webstore)
+[![Firefox AMO](https://img.shields.io/badge/Firefox_AMO-Ready-orange.svg?style=for-the-badge)](https://addons.mozilla.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg?style=for-the-badge)](LICENSE)
 
 ---
 
 ## 🎯 Key Features
 
-* **💾 Auto Backup System:** Configure daily/weekly automatic backups of saved tabs and sessions with smart file rotation and manual creation triggers.
-* **⏱️ Recently Saved Widget:** View your latest saved tabs directly on the dashboard with quick action links (Open, Copy, Delete).
-* **👁️ Restore Preview Dialog:** Verify backup details, sizes, and check for potential data loss warnings side-by-side before restoring.
-* **🧹 Smart Duplicate Prevention:** Advanced URL normalization that ignores case differences, matching trailing slashes, and strips tracking parameters (`utm`, `ref`).
-* **⭐ Favorites Support:** Highlight and pin your most critical saved tabs to the top of your workspace with one click.
-* **🗂️ Bulk Tab Saving:** Consolidate active windows into named sessions, or select multiple saved tabs to batch open, delete, or export.
+- **💾 Automated Backups**: Configure daily or weekly automatic database backups with custom retention limits (5, 10, or 20 backups) and manual triggers.
+- **⏱️ Recently Saved Panel**: Quickly view, open, clipboard-copy, or delete recently saved tabs directly from the statistics dashboard.
+- **🧹 Smart Duplicate Cleaner**: Ignore case variations, query parameter tracking strings (`utm_*`, `ref`), and matching trailing slashes for O(N) duplicate removal.
+- **⭐ Pin Favorites**: Star (☆/★) and pin critical bookmarks to the top of your layout list.
+- **🗂️ Bulk Options**: Batch select checkboxes to restore, export, or delete sets of tabs in one go.
+- **📊 Real-time Dashboard**: Track total items and local storage bytes in use via 2x2 statistics widgets.
+- **🎨 Visual Themes**: Seamlessly switch between calibrated Light, Dark, and Grey themes matching system aesthetics.
+- **🔒 Security & Privacy Hardening**: Safe text-node bindings, local-first architectures, explicit z-index modal hierarchies, and OS-motion accessibility overrides.
+
+---
+
+## 🎉 What's New in v3.2.0 (Hardening & Compatibility)
+
+- **🦊 Native Firefox MV3 Support**: Fully compliant background event page logic and specific Gecko manifest (`manifest.firefox.json`) for AMO.
+- **♿ Reduced Motion Preferences**: Full support for `prefers-reduced-motion: reduce` preventing bounce-scaling transitions and slide effects.
+- **🛡️ Custom Modal Styling**: Polished dark slate overlay styling with backdrop blur filters (`blur(8px)`), safe outline focus rings, and explicit z-index constraints.
+- **📘 Architecture Documentation**: Inline configuration architecture comments inside `config.js`.
 
 ---
 
 ## 🎉 What's New in v3.1.0
 
-Version `3.1.0` introduces automated data protection, smart duplicate filters, and an analytics widget:
-
-* **💾 Automatic Backup System:** Configurable daily or weekly automatic backups of saved tabs and sessions, complete with local retention limit controls (5, 10, or 20) and a "Create Backup Now" trigger in Settings.
-* **⏱️ Recently Saved Widget:** A dynamic dashboard panel in the Statistics tab displaying your latest saved tabs, complete with favicon support, "time-ago" indicators, restoration links, clipboard copies, and deletions.
-* **👁️ Restore Preview Dialog:** Prevent accidental data loss. Clicking restore triggers a side-by-side comparison modal highlighting data size, counts, and a clear red warning indicating exactly how many tabs/sessions you might lose.
-* **⚡ Auto Save Improvements:** Optimized Manifest V3 background service worker alarm polling and persistent cooldown checks, preventing write flooding while ensuring robust idle-state saves.
-* **🧹 Smart Duplicate Prevention:** Advanced URL normalization that ignores case differences, matching trailing slashes, and stripping out marketing trackers (`utm_*`, `ref`) before comparisons.
+- **💾 Automated Local Backups**: Daily/weekly scheduling and retention policies.
+- **👁️ Restore Preview Dialog**: A comparative metrics view mapping backup sizes, tab counts, and loss warnings side-by-side.
+- **🧹 URL Normalization**: Normalizer filters designed to sanitize tracking strings during duplicate checks.
 
 ---
-
-## 🎉 What's New in v3.0.0
-
-Version `3.0.0` is a major upgrade introducing massive productivity improvements, a complete SaaS-style UI redesign, and security enhancements:
-
-* **⭐ Favorites System:** Instantly star (☆ / ★) saved tabs to pin them to the top of your list.
-* **🗂️ Bulk Selection:** Batch select tabs to restore, delete, or export them in one click.
-* **🧹 Duplicate Tab Cleaner:** Clean duplicate saved URLs safely while keeping the oldest records.
-* **📊 Analytics Dashboard:** A real-time 2x2 statistics panel tracking database entries and storage footprint.
-* **🎨 Calibration Themes:** Seamlessly swap between polished Light, Dark, and Grey themes.
-* **🔒 Security & Performance:** Transitioned data persistence to standard local storage, fixed XSS vulnerability, resolved background worker lifecycle bugs, and reduced rendering paint overhead by replacing CSS wildcards.
-* **💾 Local-First Security:** Complete removal of external OAuth/Google-sync trackers in favor of clean local JSON backups and restore.
-
-
-
-
 
 ## 🧱 Project Structure
 
-- background.js → Handles background logic and message passing
-- manifest.json → Defines extension metadata and permissions
-- popup.html → Popup interface shown when the extension icon is clicked
-- popup.js → Logic for popup interactions and tab management
-- style.css → Styles for the popup interface
-- icons/ → Contains the extension icon (icon48.png)
+- [manifest.json](manifest.json) — Extension manifest configurations for Google Chrome.
+- [manifest.firefox.json](manifest.firefox.json) — Tailored extension configurations for Mozilla Firefox.
+- [popup.html](popup.html) — Extension dashboard HTML interface.
+- [popup.js](popup.js) — Popup UI and browser event controllers.
+- [background.js](background.js) — Background Service Worker and alarms lifecycle listener.
+- [shared.js](shared.js) — Shared utility functions namespace.
+- [config.js](config.js) — Shared environment parameters definition.
+- [style.css](style.css) — Clean, modern styling sheets.
+- [icons/](icons/) — Product logo directories.
 
-## 🛠️ Chrome Installation Guide
+---
 
-1. **Download the Code**: Click **Code > Download ZIP** on GitHub and extract the archive on your local computer.
-2. **Open Extensions Page**: Open Google Chrome and navigate to `chrome://extensions/`.
-3. **Enable Developer Mode**: Turn on the **Developer mode** toggle switch in the top-right corner.
-4. **Load Unpacked**: Click the **Load unpacked** button in the top-left corner and select the extracted folder (containing `manifest.json`).
-5. **Pin the Extension**: Click the Extensions (puzzle piece) icon in your toolbar, pin **Tab Saver Pro**, and open it.
+## 🛠️ Installation Guide
 
-## 🦊 Experimental Firefox Support
+### Google Chrome
+1. Download this repository code as a ZIP file and extract it.
+2. Navigate to `chrome://extensions/` in Chrome.
+3. Turn on the **Developer mode** toggle in the top-right corner.
+4. Click **Load unpacked** in the top-left and select the extracted project folder (containing `manifest.json`).
 
-Firefox support is currently experimental.
+### Mozilla Firefox
+1. Open Mozilla Firefox and type `about:debugging#/runtime/this-firefox` in the address bar.
+2. Click **Load Temporary Add-on...** on the right side.
+3. Rename `manifest.firefox.json` to `manifest.json` temporarily (or copy it over the main one) and select the file in the project folder to register the extension.
 
-Advanced users can load the Firefox-compatible manifest when testing the extension in Mozilla Firefox.
+---
 
-Additional compatibility testing is ongoing.
+## 🔒 Security & Privacy
 
+Tab Saver Pro is developed with strict **offline-first security**:
+- **No external servers or tracking scripts**: All operations run inside your browser. No analytics, telemetry, or third-party requests.
+- **Local JSON Backups**: Manual exports and automated backup histories are kept only inside your local browser storage (`chrome.storage.local`).
+- **DOM Sanitization**: Protects against Cross-Site Scripting (XSS) by using safe HTML element bindings and whitelisted URL protocol checks.
+- For complete policy details, please read the [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md) documents.
 
+---
 
+## 📋 Manifest Permissions
 
-## 🔮 Future Improvements
+This extension requests the minimum permissions necessary to function:
+- `tabs` — Required to query active window tabs for saving.
+- `storage` — Required to store saved tabs, settings, and local backups.
+- `downloads` — Required to export tab backups as JSON files.
+- `idle` — Required to execute auto-saves when the user is inactive.
+- `notifications` — Required to alert when auto-saves execute.
+- `alarms` — Required to trigger periodic backup sweeps.
 
-- [ ] Custom keyboard shortcuts for quick tab saving and dashboard toggle.
-- [ ] Unified search indexing to query tab titles, URLs, and session names simultaneously.
+---
 
---- 
+## ❓ FAQ & Troubleshooting
+
+### Why did a tab backup restore skip file URLs?
+By default, browser extensions cannot open local `file://` paths unless you explicitly enable it in your browser's extension settings page under **Allow access to file URLs**.
+
+### How does duplicate detection handle query parameters?
+Tab Saver Pro strips marketing tracking parameters (such as `utm_source`, `ref`, and `utm_medium`) and ignores trailing slashes, so `https://example.com/` and `https://example.com?utm_source=ref` are matched as duplicates.
+
+---
 
 ## 🤝 Contributing
 
-Contributions are always welcome!  
-To contribute:
-1. Fork this repository.  
-2. Create a new branch (`feature/your-feature-name`).  
-3. Make your changes and commit them.  
-4. Submit a Pull Request with a clear description of your update.
+Contributions are welcome! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) files for guidelines.
 
----
-## 🏁 Contributors
-
-<a href="https://github.com/kronpatel/Advance-Tab-Saver/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=kronpatel/Advance-Tab-Saver" />
-</a>
-
-
-### 💡 Author
----
-Developed by [@kronpatel](https://github.com/kronpatel)  
-Made with ❤️ for productivity and better tab management.
+### Developed by [@kronpatel](https://github.com/kronpatel)
+Made with ❤️ for clean interfaces and tab hygiene.

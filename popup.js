@@ -18,18 +18,24 @@ if (typeof chrome === "undefined" || !chrome.runtime) {
           try {
             const tabsVal = localStorage.getItem("savedTabs");
             if (tabsVal) savedTabs = JSON.parse(tabsVal);
-          } catch(e){}
+          } catch (e) {
+            console.warn("Mock triggerManualBackup: Failed to parse savedTabs", e);
+          }
           try {
             const sessionsVal = localStorage.getItem("savedSessions");
             if (sessionsVal) savedSessions = JSON.parse(sessionsVal);
-          } catch(e){}
-          
+          } catch (e) {
+            console.warn("Mock triggerManualBackup: Failed to parse savedSessions", e);
+          }
+
           let settings = { maxBackups: 10 };
           try {
             const settingsVal = localStorage.getItem("autoBackupSettings");
             if (settingsVal) settings = JSON.parse(settingsVal);
-          } catch(e){}
-          
+          } catch (e) {
+            console.warn("Mock triggerManualBackup: Failed to parse autoBackupSettings", e);
+          }
+
           const now = Date.now();
           const newBackup = {
             backupId: now,
@@ -38,21 +44,23 @@ if (typeof chrome === "undefined" || !chrome.runtime) {
             sessionCount: savedSessions.length,
             backupData: { savedTabs, savedSessions }
           };
-          
+
           let backupHistory = [];
           try {
             const historyVal = localStorage.getItem("backupHistory");
             if (historyVal) backupHistory = JSON.parse(historyVal);
-          } catch(e){}
-          
+          } catch (e) {
+            console.warn("Mock triggerManualBackup: Failed to parse backupHistory", e);
+          }
+
           const maxBackups = parseInt(settings.maxBackups, 10) || 10;
           const updatedHistory = [newBackup, ...backupHistory].slice(0, maxBackups);
-          
+
           settings.lastBackupTime = now;
-          
+
           localStorage.setItem("backupHistory", JSON.stringify(updatedHistory));
           localStorage.setItem("autoBackupSettings", JSON.stringify(settings));
-          
+
           const resp = { success: true, backup: newBackup };
           if (callback) callback(resp);
           return Promise.resolve(resp);
@@ -64,7 +72,9 @@ if (typeof chrome === "undefined" || !chrome.runtime) {
             if (settingsVal) settings = JSON.parse(settingsVal);
             const updated = { ...settings, ...msg.settings };
             localStorage.setItem("autoBackupSettings", JSON.stringify(updated));
-          } catch(e){}
+          } catch (e) {
+            console.warn("Mock updateAutoBackupSettings: Failed to parse autoBackupSettings", e);
+          }
           const resp = { success: true };
           if (callback) callback(resp);
           return Promise.resolve(resp);
@@ -145,57 +155,12 @@ if (typeof chrome === "undefined" || !chrome.runtime) {
 }
 
 // ======= Constants =======
-const DEFAULT_FAVICON =
-  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="%23ddd"/></svg>';
+const DEFAULT_FAVICON = window.TSP.DEFAULT_FAVICON;
 const MAX_SAVED_TABS = 1000;
 
 // ======= Utility Functions =======
-function escapeHTML(str) {
-  if (typeof str !== "string") return "";
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
-
-// Normalize URL for robust duplicate comparison
-function normalizeUrl(urlStr) {
-  if (!urlStr || typeof urlStr !== "string") return "";
-  try {
-    const url = new URL(urlStr);
-    let pathname = url.pathname;
-    if (pathname.endsWith("/") && pathname.length > 1) {
-      pathname = pathname.slice(0, -1);
-    }
-    const params = new URLSearchParams(url.search);
-    const trackingParams = [
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_term",
-      "utm_content",
-      "ref"
-    ];
-    let changed = false;
-    trackingParams.forEach((param) => {
-      if (params.has(param)) {
-        params.delete(param);
-        changed = true;
-      }
-    });
-    const search = changed
-      ? params.toString()
-        ? "?" + params.toString()
-        : ""
-      : url.search;
-    return `${url.protocol}//${url.hostname}${url.port ? ":" + url.port : ""}${pathname}${search}${url.hash}`;
-  } catch (e) {
-    let cleaned = urlStr.trim();
-    if (cleaned.endsWith("/") && cleaned.length > 1) {
-      cleaned = cleaned.slice(0, -1);
-    }
-    return cleaned;
-  }
-}
+const escapeHTML = window.TSP.escapeHTML;
+const normalizeUrl = window.TSP.normalizeUrl;
 
 // Get hostname domain from URL
 function getDomain(urlStr) {
@@ -226,16 +191,16 @@ async function updateRecentlySaved(newTabs) {
   try {
     const result = await chrome.storage.local.get(["recentlySaved"]);
     const current = result.recentlySaved || [];
-    
+
     const formattedNew = newTabs.map(t => ({
       title: t.title || "Untitled",
       url: t.url,
       favicon: t.favicon || "",
       savedAt: t.savedAt || Date.now()
     }));
-    
+
     let merged = [...formattedNew, ...current];
-    
+
     const unique = [];
     const seenUrls = new Set();
     for (const item of merged) {
@@ -245,7 +210,7 @@ async function updateRecentlySaved(newTabs) {
         unique.push(item);
       }
     }
-    
+
     const finalRecentlySaved = unique.slice(0, 10);
     await chrome.storage.local.set({ recentlySaved: finalRecentlySaved });
   } catch (error) {
@@ -259,10 +224,10 @@ async function syncRecentlySavedWithSavedTabs() {
     const result = await chrome.storage.local.get(["savedTabs", "recentlySaved"]);
     const savedTabs = result.savedTabs || [];
     const recentlySaved = result.recentlySaved || [];
-    
+
     const savedUrls = new Set(savedTabs.map(t => normalizeUrl(t.url)));
     const updated = recentlySaved.filter(t => savedUrls.has(normalizeUrl(t.url)));
-    
+
     if (updated.length !== recentlySaved.length) {
       await chrome.storage.local.set({ recentlySaved: updated });
     }
@@ -294,6 +259,7 @@ const messageBar = document.getElementById("messageBar");
 
 // ======= Productivity State =======
 let selectedTabUrls = [];
+let activeRestoreBackup = null;
 
 // Bulk Selection UI elements
 const bulkControls = document.getElementById("bulkControls");
@@ -376,41 +342,105 @@ function showMessage(msg, type = "info", duration = 3000) {
   }, duration);
 }
 
-// ======= Error Handling & Validation Utilities =======
-function checkFileSchemeAccess(callback) {
-  try {
-    const extAPI = typeof chrome !== "undefined" ? chrome : (typeof browser !== "undefined" ? browser : null);
-    if (extAPI && extAPI.extension && typeof extAPI.extension.isAllowedFileSchemeAccess === "function") {
-      extAPI.extension.isAllowedFileSchemeAccess((isAllowed) => {
-        callback(!!isAllowed);
-      });
-    } else {
-      callback(false);
+// ======= Custom Confirm Modal Functions =======
+let confirmModalResolver = null;
+let lastActiveElement = null;
+
+function showConfirm(message, isDestructive = false, title = "Confirm Action") {
+  return new Promise((resolve) => {
+    lastActiveElement = document.activeElement;
+
+    const modal = document.getElementById("confirmModal");
+    const titleEl = document.getElementById("confirmTitle");
+    const messageEl = document.getElementById("confirmMessage");
+    const okBtn = document.getElementById("okConfirmBtn");
+    const cancelBtn = document.getElementById("cancelConfirmBtn");
+
+    if (!modal || !titleEl || !messageEl || !okBtn || !cancelBtn) {
+      console.warn("Confirm modal DOM elements not found. Falling back to native confirm.");
+      resolve(window.confirm(message));
+      return;
     }
-  } catch (e) {
-    console.error("Error checking file scheme access:", e);
-    callback(false);
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+
+    if (isDestructive) {
+      okBtn.className = "btn danger";
+      okBtn.textContent = "Delete";
+    } else {
+      okBtn.className = "btn save";
+      okBtn.textContent = "Confirm";
+    }
+
+    if (confirmModalResolver) {
+      confirmModalResolver(false);
+    }
+
+    confirmModalResolver = resolve;
+    modal.classList.remove("hidden");
+    cancelBtn.focus();
+  });
+}
+
+function closeConfirmModal(result) {
+  const modal = document.getElementById("confirmModal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+  if (confirmModalResolver) {
+    const resolve = confirmModalResolver;
+    confirmModalResolver = null;
+    resolve(result);
+  }
+  if (lastActiveElement && typeof lastActiveElement.focus === "function") {
+    lastActiveElement.focus();
+    lastActiveElement = null;
   }
 }
 
-function isValidUrl(string) {
-  try {
-    const url = new URL(string);
-    // Explicitly restrict to safe web protocols, file support, and safe placeholder
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      return true;
-    }
-    if (url.protocol === "file:") {
-      return true;
-    }
-    if (url.protocol === "about:") {
-      return url.href === "about:blank";
-    }
-    return false;
-  } catch (_) {
-    return false;
+// Keyboard management and focus trap for the confirm modal
+document.addEventListener("keydown", (e) => {
+  const modal = document.getElementById("confirmModal");
+  if (!modal || modal.classList.contains("hidden")) return;
+
+  const okBtn = document.getElementById("okConfirmBtn");
+  const cancelBtn = document.getElementById("cancelConfirmBtn");
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeConfirmModal(false);
   }
-}
+
+  if (e.key === "Enter") {
+    if (document.activeElement !== okBtn && document.activeElement !== cancelBtn) {
+      e.preventDefault();
+      closeConfirmModal(true);
+    }
+  }
+
+  if (e.key === "Tab") {
+    const focusable = [cancelBtn, okBtn];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+});
+
+// ======= Error Handling & Validation Utilities =======
+const checkFileSchemeAccess = window.TSP.checkFileSchemeAccess;
+const isValidUrl = window.TSP.isValidUrl;
 
 function isValidTab(tab) {
   if (!tab || typeof tab.title !== "string" || typeof tab.url !== "string") {
@@ -426,40 +456,7 @@ function isValidTab(tab) {
 }
 
 
-function sanitizeTabData(tab) {
-  if (!tab) return null;
-
-  let favicon = tab.favicon || tab.favIconUrl;
-  if (!favicon && tab.url) {
-    try {
-      const urlObj = new URL(tab.url);
-      // Only use Google favicon service for http/https URLs
-      if (urlObj.protocol === "http:" || urlObj.protocol === "https:") {
-        favicon = `https://www.google.com/s2/favicons?domain=${urlObj.hostname}`;
-      } else {
-        favicon = DEFAULT_FAVICON;
-      }
-    } catch (error) {
-      favicon = DEFAULT_FAVICON;
-    }
-  }
-
-  const sanitized = {
-    title: String(tab.title || "Untitled").slice(0, 500),
-    url: String(tab.url || "").slice(0, 2048),
-    favicon: favicon || DEFAULT_FAVICON,
-    savedAt: tab.savedAt || Date.now(),
-    category: tab.category ? String(tab.category).slice(0, 100) : undefined,
-    favorite: tab.favorite === true
-  };
-
-  const isValid = isValidTab(sanitized);
-  if (!isValid) {
-    console.log("Tab validation failed for:", sanitized);
-  }
-
-  return isValid ? sanitized : null;
-}
+const sanitizeTabData = window.TSP.sanitizeTabData;
 
 async function safeStorageOperation(operation, errorContext) {
   try {
@@ -573,7 +570,7 @@ function renderTabs(tabs, totalSavedCount = null) {
       tabCount.textContent = "0";
       const totalCount = totalSavedCount !== null ? totalSavedCount : 0;
       if (totalTabs) totalTabs.textContent = `Total saved: ${totalCount}`;
-      
+
       // Update bulk controls
       updateBulkControlsUI();
       return;
@@ -750,7 +747,7 @@ async function loadTabs() {
     // Validate and clean data
     await validateStorageData();
     await refreshTabsList();
-    
+
     // Update dashboard metrics
     updateDashboardMetrics();
 
@@ -794,11 +791,6 @@ tabList.addEventListener("click", async (e) => {
       }
       try {
         await chrome.tabs.create({ url });
-        if (chrome.runtime.lastError) {
-          console.warn("Tab likely closed before action:", chrome.runtime.lastError.message);
-          showMessage("Failed to open tab. It may have been closed.", "warning");
-          return;
-        }
         showMessage("Tab opened!", "success");
       } catch (error) {
         console.error("Error opening tab:", error);
@@ -824,9 +816,7 @@ tabList.addEventListener("click", async (e) => {
 
       if (saveResult.success) {
         // Remove the tab element from the DOM for better performance
-        const tabDiv = tabList
-          .querySelector(`.tab button.delete[data-url="${url}"]`)
-          ?.closest(".tab");
+        const tabDiv = e.target.closest(".tab");
         if (tabDiv) {
           tabDiv.remove();
           // Update tab count
@@ -878,11 +868,6 @@ saveCurrentBtn.onclick = async () => {
       active: true,
       currentWindow: true,
     });
-    if (chrome.runtime.lastError) {
-      console.warn("Tab query error:", chrome.runtime.lastError.message);
-      showMessage("Failed to access current tab. Please try again.", "warning");
-      return;
-    }
     if (!tab) {
       showMessage("No active tab found", "warning");
       return;
@@ -899,7 +884,9 @@ saveCurrentBtn.onclick = async () => {
           selectedCategory = categorySelect.value;
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Failed to determine category selection:", e);
+    }
 
     const sanitizedTab = sanitizeTabData({ ...tab, category: selectedCategory });
     if (!sanitizedTab) {
@@ -969,12 +956,8 @@ saveAllBtn.addEventListener("click", async () => {
     return;
   }
 
-  chrome.tabs.query({ currentWindow: true }, (tabs) => {
-    if (chrome.runtime.lastError) {
-      console.warn("Tab query error:", chrome.runtime.lastError.message);
-      showMessage("Failed to retrieve open tabs.", "warning");
-      return;
-    }
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
     const count = (tabs || []).length;
     saveAllCountMessage.textContent = `You currently have ${count} open tabs. Choose how you want to save them.`;
 
@@ -983,7 +966,10 @@ saveAllBtn.addEventListener("click", async () => {
     if (firstRadio) firstRadio.checked = true;
 
     saveAllModeModal.classList.remove("hidden");
-  });
+  } catch (error) {
+    console.warn("Tab query error:", error);
+    showMessage("Failed to retrieve open tabs.", "warning");
+  }
 });
 
 function setupSaveAllModeModalHandlers() {
@@ -1025,93 +1011,95 @@ function setupSaveAllModeModalHandlers() {
 
 async function saveAllAsIndividualTabs() {
   try {
-    chrome.tabs.query({ currentWindow: true }, async (tabs) => {
-      if (chrome.runtime.lastError) {
-        console.warn("Tab query error:", chrome.runtime.lastError.message);
-        showMessage("Failed to retrieve open tabs.", "warning");
-        return;
-      }
-      
-      if (!tabs || tabs.length === 0) {
-        showMessage("No tabs to save.", "warning");
-        return;
-      }
+    const tabs = await chrome.tabs.query({ currentWindow: true });
 
-      // Fetch active category from quick actions
-      let selectedCategory = undefined;
-      try {
-        if (categorySelect) {
-          if (categorySelect.value === "Custom") {
-            const customVal = (customCategoryInput?.value || "").trim();
-            if (customVal.length > 0) selectedCategory = customVal;
-          } else {
-            selectedCategory = categorySelect.value;
-          }
-        }
-      } catch (e) {}
+    if (!tabs || tabs.length === 0) {
+      showMessage("No tabs to save.", "warning");
+      return;
+    }
 
-      // Sanitize open tabs using the fetched category
-      const sanitizedTabs = [];
-      tabs.forEach((tab) => {
-        const sanitized = sanitizeTabData({ ...tab, category: selectedCategory });
-        if (sanitized) {
-          sanitizedTabs.push(sanitized);
-        }
-      });
-
-      if (sanitizedTabs.length === 0) {
-        showMessage("No valid tabs found to save.", "warning");
-        return;
-      }
-
-      // Retrieve existing tabs from storage to avoid duplicate tabs
-      const result = await safeStorageOperation(
-        () => chrome.storage.local.get(["savedTabs"]),
-        "loading saved tabs for save all"
-      );
-      if (!result.success) return;
-
-      const { savedTabs = [] } = result.data;
-      let addedCount = 0;
-      const finalTabs = [...savedTabs];
-
-      for (const tab of sanitizedTabs) {
-        // Prevent duplicate tab save: check if URL already exists
-        if (!finalTabs.find((t) => normalizeUrl(t.url) === normalizeUrl(tab.url))) {
-          finalTabs.push(tab);
-          addedCount++;
+    // Fetch active category from quick actions
+    let selectedCategory = undefined;
+    try {
+      if (categorySelect) {
+        if (categorySelect.value === "Custom") {
+          const customVal = (customCategoryInput?.value || "").trim();
+          if (customVal.length > 0) selectedCategory = customVal;
+        } else {
+          selectedCategory = categorySelect.value;
         }
       }
+    } catch (e) {
+      console.warn("Failed to get active category:", e);
+    }
 
-      if (addedCount === 0) {
-        showMessage("All open tabs are already saved!", "warning");
-        return;
-      }
-
-      if (finalTabs.length > MAX_SAVED_TABS) {
-        const canSave = MAX_SAVED_TABS - savedTabs.length;
-        if (canSave <= 0) {
-          showMessage(`Cannot save tabs: storage limit reached (${MAX_SAVED_TABS} tabs)`, "warning");
-          return;
-        }
-        showMessage(`Only saving ${canSave} tabs due to storage limit`, "warning", 4000);
-        finalTabs.splice(MAX_SAVED_TABS);
-        addedCount = finalTabs.length - savedTabs.length;
-      }
-
-      const saveResult = await safeStorageOperation(
-        () => chrome.storage.local.set({ savedTabs: finalTabs }),
-        "saving all tabs individually"
-      );
-
-      if (saveResult.success) {
-        const addedTabs = sanitizedTabs.filter(t => !savedTabs.find(st => normalizeUrl(st.url) === normalizeUrl(t.url)));
-        await updateRecentlySaved(addedTabs);
-        await refreshTabsList();
-        updateDashboardMetrics();
-        showMessage(`Saved ${addedCount} tabs successfully.`, "success");
+    // Sanitize open tabs using the fetched category
+    const sanitizedTabs = [];
+    tabs.forEach((tab) => {
+      const sanitized = sanitizeTabData({ ...tab, category: selectedCategory });
+      if (sanitized) {
+        sanitizedTabs.push(sanitized);
       }
     });
+
+    if (sanitizedTabs.length === 0) {
+      showMessage("No valid tabs found to save.", "warning");
+      return;
+    }
+
+    // Retrieve existing tabs from storage to avoid duplicate tabs
+    const result = await safeStorageOperation(
+      () => chrome.storage.local.get(["savedTabs"]),
+      "loading saved tabs for save all"
+    );
+    if (!result.success) return;
+
+    const { savedTabs = [] } = result.data;
+    let addedCount = 0;
+    const finalTabs = [...savedTabs];
+
+    // PERF-01: Pre-build normalized URLs set to optimize duplicate checking
+    const normalizedSavedUrls = new Set(savedTabs.map(t => normalizeUrl(t.url)));
+    const addedTabsList = [];
+
+    for (const tab of sanitizedTabs) {
+      const normUrl = normalizeUrl(tab.url);
+      if (!normalizedSavedUrls.has(normUrl)) {
+        finalTabs.push(tab);
+        normalizedSavedUrls.add(normUrl);
+        addedTabsList.push(tab);
+        addedCount++;
+      }
+    }
+
+    if (addedCount === 0) {
+      showMessage("All open tabs are already saved!", "warning");
+      return;
+    }
+
+    if (finalTabs.length > MAX_SAVED_TABS) {
+      const canSave = MAX_SAVED_TABS - savedTabs.length;
+      if (canSave <= 0) {
+        showMessage(`Cannot save tabs: storage limit reached (${MAX_SAVED_TABS} tabs)`, "warning");
+        return;
+      }
+      showMessage(`Only saving ${canSave} tabs due to storage limit`, "warning", 4000);
+      finalTabs.splice(MAX_SAVED_TABS);
+      addedCount = finalTabs.length - savedTabs.length;
+      addedTabsList.splice(canSave);
+    }
+
+    const saveResult = await safeStorageOperation(
+      () => chrome.storage.local.set({ savedTabs: finalTabs }),
+      "saving all tabs individually"
+    );
+
+    if (saveResult.success) {
+      await updateRecentlySaved(addedTabsList);
+      await refreshTabsList();
+      updateDashboardMetrics();
+      showMessage(`Saved ${addedCount} tabs successfully.`, "success");
+    }
   } catch (error) {
     console.error("Error saving all tabs individually:", error);
     showMessage("Failed to save all tabs.", "warning");
@@ -1124,7 +1112,7 @@ function openSaveSessionModal() {
     return;
   }
   const now = new Date();
-  sessionNameInput.value = `Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+  sessionNameInput.value = `Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
   // Reset category selectors inside session modal
   if (sessionCategorySelect) {
@@ -1199,12 +1187,8 @@ function setupSaveSessionModalHandlers() {
       const name = (sessionNameInput?.value || "").trim();
       if (!name) return;
 
-      chrome.tabs.query({ currentWindow: true }, async (tabs) => {
-        if (chrome.runtime.lastError) {
-          console.warn("Tab query error:", chrome.runtime.lastError.message);
-          showMessage("Failed to access tabs. Please try again.", "warning");
-          return;
-        }
+      try {
+        const tabs = await chrome.tabs.query({ currentWindow: true });
 
         let selectedCategory = undefined;
         try {
@@ -1216,46 +1200,52 @@ function setupSaveSessionModalHandlers() {
               selectedCategory = sessionCategorySelect.value;
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Failed to get session category:", e);
+        }
 
         const sanitizedTabs = (tabs || []).map(sanitizeTabData).filter(t => t !== null);
+        if (sanitizedTabs.length === 0) {
+          showMessage("No valid tabs to save in session", "warning");
+          return;
+        }
 
         const session = {
-          id: Date.now(),
+          id: crypto.randomUUID(),
           name,
           category: selectedCategory,
           tabs: sanitizedTabs,
           createdAt: new Date().toISOString(),
         };
 
-        try {
-          const result = await safeStorageOperation(
-            () => chrome.storage.local.get("savedSessions"),
-            "loading sessions"
-          );
-          
-          if (!result.success) return;
+        const result = await safeStorageOperation(
+          () => chrome.storage.local.get("savedSessions"),
+          "loading sessions"
+        );
 
-          const { savedSessions = [] } = result.data;
-          savedSessions.push(session);
-          
-          const saveResult = await safeStorageOperation(
-            () => chrome.storage.local.set({ savedSessions }),
-            "saving session"
-          );
+        if (!result.success) return;
 
-          if (saveResult.success) {
-            saveSessionModal.classList.add("hidden");
-            if (typeof loadSessions === "function") {
-              try { await loadSessions(); } catch (e) {}
+        const { savedSessions = [] } = result.data;
+        savedSessions.push(session);
+
+        const saveResult = await safeStorageOperation(
+          () => chrome.storage.local.set({ savedSessions }),
+          "saving session"
+        );
+
+        if (saveResult.success) {
+          saveSessionModal.classList.add("hidden");
+          if (typeof loadSessions === "function") {
+            try { await loadSessions(); } catch (e) {
+              console.warn("Failed to load sessions after save:", e);
             }
-            showMessage("Session saved!", "success");
           }
-        } catch (error) {
-          console.error("Error saving session:", error);
-          showMessage("Failed to save session.", "warning");
+          showMessage("Session saved!", "success");
         }
-      });
+      } catch (error) {
+        console.error("Error saving session:", error);
+        showMessage("Failed to save session.", "warning");
+      }
     });
     confirmSaveBtn.dataset.boundConfirm = "true";
   }
@@ -1300,40 +1290,87 @@ async function loadSessions() {
       const date = new Date(session.createdAt).toLocaleDateString();
       const tabCount = (session.tabs || []).length;
 
-      let badgeHTML = "";
+      const sessionInfo = document.createElement("div");
+      sessionInfo.className = "session-info";
+
+      const nameRow = document.createElement("div");
+      nameRow.className = "session-name-row";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "session-name";
+      nameSpan.textContent = session.name;
+
+      nameRow.appendChild(nameSpan);
+
       if (session.category) {
-        badgeHTML = `<span class="category-badge badge-${session.category.toLowerCase().replace(/[^a-z0-9]/g, "-")}">${escapeHTML(session.category)}</span>`;
+        const badge = document.createElement("span");
+        badge.className = `category-badge badge-${session.category.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+        badge.textContent = session.category;
+        nameRow.appendChild(badge);
       }
 
-      div.innerHTML = `
-        <div class="session-info">
-          <div class="session-name-row">
-            <span class="session-name">${escapeHTML(session.name)}</span>
-            ${badgeHTML}
-          </div>
-          <div class="session-meta">
-            <span class="session-meta-item">
-              <span class="material-icons session-meta-icon">calendar_today</span>
-              <span>${date}</span>
-            </span>
-            <span class="session-meta-divider">&bull;</span>
-            <span class="session-meta-item">
-              <span class="material-icons session-meta-icon">tab</span>
-              <span>${tabCount} tab${tabCount > 1 ? 's' : ''}</span>
-            </span>
-          </div>
-        </div>
-        <div class="session-actions">
-          <button class="btn restore" data-id="${session.id}">
-            <span class="material-icons">restore</span>
-            <span>Restore</span>
-          </button>
-          <button class="btn delete" data-id="${session.id}">
-            <span class="material-icons">delete</span>
-            <span>Delete</span>
-          </button>
-        </div>
-      `;
+      const sessionMeta = document.createElement("div");
+      sessionMeta.className = "session-meta";
+
+      const createMetaItem = (iconName, textVal) => {
+        const metaItem = document.createElement("span");
+        metaItem.className = "session-meta-item";
+
+        const icon = document.createElement("span");
+        icon.className = "material-icons session-meta-icon";
+        icon.textContent = iconName;
+
+        const textSpan = document.createElement("span");
+        textSpan.textContent = textVal;
+
+        metaItem.appendChild(icon);
+        metaItem.appendChild(textSpan);
+        return metaItem;
+      };
+
+      const dateItem = createMetaItem("calendar_today", date);
+
+      const divider = document.createElement("span");
+      divider.className = "session-meta-divider";
+      divider.innerHTML = "&bull;";
+
+      const tabCountItem = createMetaItem("tab", `${tabCount} tab${tabCount > 1 ? 's' : ''}`);
+
+      sessionMeta.appendChild(dateItem);
+      sessionMeta.appendChild(divider);
+      sessionMeta.appendChild(tabCountItem);
+
+      sessionInfo.appendChild(nameRow);
+      sessionInfo.appendChild(sessionMeta);
+
+      const sessionActions = document.createElement("div");
+      sessionActions.className = "session-actions";
+
+      const createActionBtn = (btnClass, iconName, labelText) => {
+        const btn = document.createElement("button");
+        btn.className = `btn ${btnClass}`;
+        btn.dataset.id = session.id;
+
+        const icon = document.createElement("span");
+        icon.className = "material-icons";
+        icon.textContent = iconName;
+
+        const text = document.createElement("span");
+        text.textContent = labelText;
+
+        btn.appendChild(icon);
+        btn.appendChild(text);
+        return btn;
+      };
+
+      const restoreBtn = createActionBtn("restore", "restore", "Restore");
+      const deleteBtn = createActionBtn("delete", "delete", "Delete");
+
+      sessionActions.appendChild(restoreBtn);
+      sessionActions.appendChild(deleteBtn);
+
+      div.appendChild(sessionInfo);
+      div.appendChild(sessionActions);
 
       list.appendChild(div);
     });
@@ -1366,6 +1403,10 @@ async function restoreSession(id) {
 
     const { savedSessions = [] } = result.data;
     const session = savedSessions.find((s) => s.id == id);
+    if (!session) {
+      showMessage("Session not found", "warning");
+      return;
+    }
     if (session.tabs && session.tabs.length > 0) {
       showMessage(`Restoring session with ${session.tabs.length} tabs...`, "info");
       const response = await chrome.runtime.sendMessage({
@@ -1396,7 +1437,7 @@ async function restoreSession(id) {
 }
 
 async function deleteSession(id) {
-  const confirmDelete = confirm("Delete this session permanently?");
+  const confirmDelete = await showConfirm("Delete this session permanently?", true, "Delete Session");
   if (!confirmDelete) return;
 
   try {
@@ -1409,7 +1450,7 @@ async function deleteSession(id) {
 
     const { savedSessions = [] } = result.data;
     const updated = savedSessions.filter((s) => s.id != id);
-    
+
     const saveResult = await safeStorageOperation(
       () => chrome.storage.local.set({ savedSessions: updated }),
       "deleting session"
@@ -1442,8 +1483,10 @@ openAllBtn.onclick = async () => {
     }
 
     if (savedTabs.length > 20) {
-      const confirmed = confirm(
-        `This will open ${savedTabs.length} tabs. Continue?`
+      const confirmed = await showConfirm(
+        `This will open ${savedTabs.length} tabs. Continue?`,
+        false,
+        "Open All Tabs"
       );
       if (!confirmed) return;
     }
@@ -1493,8 +1536,10 @@ clearBtn.onclick = async () => {
       return;
     }
 
-    const confirmed = confirm(
-      `Delete all ${count} saved tabs? This cannot be undone.`
+    const confirmed = await showConfirm(
+      `Delete all ${count} saved tabs? This cannot be undone.`,
+      true,
+      "Delete All Tabs"
     );
     if (!confirmed) return;
 
@@ -1540,17 +1585,16 @@ exportBtn.onclick = async (e) => {
     const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `tab-saver-export-${timestamp}.json`;
 
-    await chrome.downloads.download({ url, filename }, (downloadId) => {
-      if (chrome.runtime.lastError) {
-        console.warn("Download error:", chrome.runtime.lastError.message);
-        showMessage("Failed to export tabs. Please try again.", "warning");
-        URL.revokeObjectURL(url);
-        return;
-      }
+    try {
+      await chrome.downloads.download({ url, filename });
       // Clean up blob URL
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       showMessage(`${validTabs.length} tabs exported successfully!`, "success");
-    });
+    } catch (downloadError) {
+      console.warn("Download error:", downloadError);
+      showMessage("Failed to export tabs. Please try again.", "warning");
+      URL.revokeObjectURL(url);
+    }
   } catch (error) {
     console.error("Error exporting tabs:", error);
     showMessage("Failed to export tabs. Please try again.", "warning");
@@ -1920,7 +1964,7 @@ if (themeToggleBtn) {
 
       const { theme = "dark", font = "14px" } = result.data;
       const nextTheme = theme === "light" ? "dark" : "light";
-      
+
       const saveResult = await safeStorageOperation(
         () => chrome.storage.local.set({ theme: nextTheme }),
         "saving theme"
@@ -2011,7 +2055,7 @@ async function bulkOpenSelected() {
   }
 
   if (selectedTabUrls.length > 20) {
-    const confirmed = confirm(`This will open ${selectedTabUrls.length} tabs. Continue?`);
+    const confirmed = await showConfirm(`This will open ${selectedTabUrls.length} tabs. Continue?`, false, "Open Selected Tabs");
     if (!confirmed) return;
   }
 
@@ -2073,16 +2117,15 @@ async function bulkExportSelected() {
   const timestamp = new Date().toISOString().slice(0, 10);
   const filename = `tab-saver-bulk-export-${timestamp}.json`;
 
-  await chrome.downloads.download({ url, filename }, (downloadId) => {
-    if (chrome.runtime.lastError) {
-      console.warn("Download error:", chrome.runtime.lastError.message);
-      showMessage("Failed to export tabs.", "warning");
-      URL.revokeObjectURL(url);
-      return;
-    }
+  try {
+    await chrome.downloads.download({ url, filename });
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     showMessage(`${tabsToExport.length} tabs exported successfully!`, "success");
-  });
+  } catch (downloadError) {
+    console.warn("Download error:", downloadError);
+    showMessage("Failed to export tabs.", "warning");
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function bulkDeleteSelected() {
@@ -2091,7 +2134,7 @@ async function bulkDeleteSelected() {
     return;
   }
 
-  const confirmed = confirm(`Delete ${selectedTabUrls.length} selected tabs? This cannot be undone.`);
+  const confirmed = await showConfirm(`Delete ${selectedTabUrls.length} selected tabs? This cannot be undone.`, true, "Delete Selected Tabs");
   if (!confirmed) return;
 
   const result = await safeStorageOperation(
@@ -2303,7 +2346,9 @@ if (categorySelect) {
     }
   };
   categorySelect.addEventListener("change", syncCategoryUI);
-  try { syncCategoryUI(); } catch (e) {}
+  try { syncCategoryUI(); } catch (e) {
+    console.warn("Failed to sync category UI on init:", e);
+  }
 }
 
 // ======= Initial Load =======
@@ -2323,8 +2368,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   sessionCustomCategoryInput = document.querySelector("#sessionCustomCategoryInput") || null;
 
   // Ensure modal event handlers are bound after rehydration
-  try { setupSaveSessionModalHandlers(); } catch (e) {}
-  try { setupSaveAllModeModalHandlers(); } catch (e) {}
+  try { setupSaveSessionModalHandlers(); } catch (e) {
+    console.warn("Failed to setup save session modal handlers:", e);
+  }
+  try { setupSaveAllModeModalHandlers(); } catch (e) {
+    console.warn("Failed to setup save all mode modal handlers:", e);
+  }
 
   if (!validateDOMElements()) {
     console.error(
@@ -2333,12 +2382,300 @@ document.addEventListener("DOMContentLoaded", async () => {
     return;
   }
 
+  // Set session name input limits
+  if (sessionNameInput) {
+    sessionNameInput.maxLength = 100;
+  }
 
+  // Confirm Modal bindings
+  const cancelConfirmBtn = document.getElementById("cancelConfirmBtn");
+  const okConfirmBtn = document.getElementById("okConfirmBtn");
+  const confirmModal = document.getElementById("confirmModal");
+  if (cancelConfirmBtn) {
+    cancelConfirmBtn.onclick = () => closeConfirmModal(false);
+  }
+  if (okConfirmBtn) {
+    okConfirmBtn.onclick = () => closeConfirmModal(true);
+  }
+  if (confirmModal) {
+    confirmModal.addEventListener("click", (e) => {
+      if (e.target === confirmModal) {
+        closeConfirmModal(false);
+      }
+    });
+  }
+
+  // Bindings consolidated from second DOMContentLoaded handler
+  // 1. Manual Backup Button click
+  const createBackupBtn = document.getElementById("createBackupBtn");
+  if (createBackupBtn) {
+    createBackupBtn.onclick = async () => {
+      createBackupBtn.disabled = true;
+      showMessage("Creating backup...", "info");
+      try {
+        const response = await chrome.runtime.sendMessage({ action: "triggerManualBackup" });
+        if (response && response.success) {
+          showMessage("Backup created successfully!", "success");
+          await loadBackupsUI();
+        } else {
+          showMessage("Failed to create backup: " + (response.error || "Unknown error"), "warning");
+        }
+      } catch (err) {
+        console.error(err);
+        showMessage("Failed to create backup.", "warning");
+      } finally {
+        createBackupBtn.disabled = false;
+      }
+    };
+  }
+
+  // 2. Restore Backup click delegation (triggers Preview modal)
+  const backupListContainer = document.getElementById("backupListContainer");
+  if (backupListContainer) {
+    backupListContainer.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".restore-backup-btn");
+      if (!btn) return;
+
+      const backupId = parseInt(btn.dataset.id, 10);
+
+      try {
+        const result = await chrome.storage.local.get(["backupHistory", "savedTabs", "savedSessions"]);
+        const backupHistory = result.backupHistory || [];
+        const backup = backupHistory.find(b => b.backupId === backupId);
+
+        if (!backup) {
+          showMessage("Backup file not found", "warning");
+          return;
+        }
+
+        const currentTabs = result.savedTabs || [];
+        const currentSessions = result.savedSessions || [];
+
+        const backupTabs = backup.backupData.savedTabs || [];
+        const backupSessions = backup.backupData.savedSessions || [];
+
+        // Calculate backup data size in KB
+        const sizeInBytes = JSON.stringify(backup.backupData).length;
+        const sizeInKB = (sizeInBytes / 1024).toFixed(1) + " KB";
+
+        // Format Date and Time
+        const createdAtDate = new Date(backup.createdAt);
+        const dateStr = createdAtDate.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+        const timeStr = createdAtDate.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        // Populate modal text fields
+        document.getElementById("rpBackupDate").textContent = dateStr;
+        document.getElementById("rpBackupTime").textContent = timeStr;
+        document.getElementById("rpBackupSize").textContent = sizeInKB;
+
+        document.getElementById("rpCurrentTabs").textContent = currentTabs.length;
+        document.getElementById("rpCurrentSessions").textContent = currentSessions.length;
+
+        document.getElementById("rpBackupTabs").textContent = backupTabs.length;
+        document.getElementById("rpBackupSessions").textContent = backupSessions.length;
+
+        // Check for potential data loss
+        const warningContainer = document.getElementById("rpWarningContainer");
+        const warningText = document.getElementById("rpWarningText");
+        const infoContainer = document.getElementById("rpInfoContainer");
+
+        const tabLoss = currentTabs.length - backupTabs.length;
+        const sessionLoss = currentSessions.length - backupSessions.length;
+
+        if (tabLoss > 0 || sessionLoss > 0) {
+          let lossMsg = `Restoring this backup will replace your current saved tabs and sessions. `;
+          const details = [];
+          if (tabLoss > 0) details.push(`lose ${tabLoss} saved tab${tabLoss > 1 ? 's' : ''}`);
+          if (sessionLoss > 0) details.push(`lose ${sessionLoss} saved session${sessionLoss > 1 ? 's' : ''}`);
+          lossMsg += `You may ${details.join(" and ")}.`;
+
+          warningText.textContent = lossMsg;
+          warningContainer.style.display = "block";
+          infoContainer.style.display = "none";
+        } else {
+          warningContainer.style.display = "none";
+          infoContainer.style.display = "block";
+        }
+
+        // Store reference to active backup for confirm action
+        activeRestoreBackup = backup;
+
+        // Show the Restore Preview modal
+        const restorePreviewModal = document.getElementById("restorePreviewModal");
+        if (restorePreviewModal) {
+          restorePreviewModal.classList.remove("hidden");
+        }
+      } catch (err) {
+        console.error("Error preparing restore preview modal:", err);
+        showMessage("Failed to open restore preview.", "warning");
+      }
+    });
+  }
+
+  // 3. Cancel Restore Preview button click
+  const cancelRestorePreviewBtn = document.getElementById("cancelRestorePreviewBtn");
+  if (cancelRestorePreviewBtn) {
+    cancelRestorePreviewBtn.onclick = () => {
+      const restorePreviewModal = document.getElementById("restorePreviewModal");
+      if (restorePreviewModal) {
+        restorePreviewModal.classList.add("hidden");
+      }
+      activeRestoreBackup = null;
+    };
+  }
+
+  // 4. Backdrop click to close Restore Preview modal
+  const restorePreviewModal = document.getElementById("restorePreviewModal");
+  if (restorePreviewModal) {
+    restorePreviewModal.addEventListener("click", (e) => {
+      // Backdrop click
+      if (e.target === restorePreviewModal) {
+        restorePreviewModal.classList.add("hidden");
+        activeRestoreBackup = null;
+      }
+    });
+  }
+
+  // 5. Confirm Restore Backup button click
+  const confirmRestorePreviewBtn = document.getElementById("confirmRestorePreviewBtn");
+  if (confirmRestorePreviewBtn) {
+    confirmRestorePreviewBtn.onclick = async () => {
+      const backup = activeRestoreBackup;
+      if (!backup) {
+        showMessage("No active backup selected.", "warning");
+        return;
+      }
+
+      confirmRestorePreviewBtn.disabled = true;
+      try {
+        const savedTabs = (backup.backupData.savedTabs || [])
+          .map(sanitizeTabData)
+          .filter(t => t !== null);
+
+        const savedSessions = (backup.backupData.savedSessions || []).map(session => {
+          const validSessionTabs = (session.tabs || [])
+            .map(sanitizeTabData)
+            .filter(t => t !== null);
+          return {
+            ...session,
+            tabs: validSessionTabs
+          };
+        });
+
+        await chrome.storage.local.set({ savedTabs, savedSessions });
+
+        // Hide modal
+        if (restorePreviewModal) {
+          restorePreviewModal.classList.add("hidden");
+        }
+        activeRestoreBackup = null;
+
+        showMessage(`Backup restored successfully!\nTabs: ${savedTabs.length} | Sessions: ${savedSessions.length}`, "success", 4000);
+
+        // Sync and refresh
+        await updateRecentlySaved(savedTabs);
+        loadTabs();
+        try { await loadSessions(); } catch (e) {
+          console.warn("Failed to load sessions after restore:", e);
+        }
+      } catch (err) {
+        console.error("Error during backup restoration:", err);
+        showMessage("Failed to restore backup.", "warning");
+      } finally {
+        confirmRestorePreviewBtn.disabled = false;
+      }
+    };
+  }
+
+  // 6. Recently Saved Actions delegation
+  const recentlySavedList = document.getElementById("recentlySavedList");
+  if (recentlySavedList) {
+    recentlySavedList.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".rs-action-btn");
+      if (!btn) return;
+
+      const url = btn.dataset.url;
+      if (btn.classList.contains("rs-open")) {
+        if (isValidUrl(url)) {
+          if (url.startsWith("file://")) {
+            checkFileSchemeAccess((isAllowed) => {
+              if (!isAllowed) {
+                showMessage("Enable 'Allow access to file URLs' in extension settings to open local files.", "warning", 5000);
+                return;
+              }
+              chrome.tabs.create({ url });
+              showMessage("Tab opened!", "success");
+            });
+            return;
+          }
+          chrome.tabs.create({ url });
+          showMessage("Tab opened!", "success");
+        } else {
+          showMessage("Invalid URL cannot be opened", "warning");
+        }
+      } else if (btn.classList.contains("rs-copy")) {
+        try {
+          await navigator.clipboard.writeText(url);
+          showMessage("URL copied to clipboard!", "success");
+        } catch (err) {
+          showMessage("Failed to copy URL", "warning");
+        }
+      } else if (btn.classList.contains("rs-delete")) {
+        const confirmed = await showConfirm("Remove this saved entry?", true, "Remove Entry");
+        if (!confirmed) return;
+
+        try {
+          // Remove from savedTabs
+          const tabsResult = await safeStorageOperation(
+            () => chrome.storage.local.get(["savedTabs"]),
+            "loading tabs for rs delete"
+          );
+          if (tabsResult.success) {
+            const filtered = (tabsResult.data.savedTabs || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
+            await safeStorageOperation(
+              () => chrome.storage.local.set({ savedTabs: filtered }),
+              "saving tabs after rs delete"
+            );
+          }
+
+          // Remove from recentlySaved
+          const rsResult = await safeStorageOperation(
+            () => chrome.storage.local.get(["recentlySaved"]),
+            "loading recently saved for rs delete"
+          );
+          if (rsResult.success) {
+            const filteredRs = (rsResult.data.recentlySaved || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
+            await safeStorageOperation(
+              () => chrome.storage.local.set({ recentlySaved: filteredRs }),
+              "saving recently saved after rs delete"
+            );
+            renderRecentlySaved(filteredRs);
+          }
+
+          loadTabs();
+          showMessage("Entry removed!", "success");
+        } catch (err) {
+          console.error("Error deleting recently saved entry:", err);
+        }
+      }
+    });
+  }
 
   loadTabs();
   // Also load saved sessions UI
-  try { await loadSessions(); } catch (e) {}
-  try { validateUI && validateUI(); } catch (e) {}
+  try { await loadSessions(); } catch (e) {
+    console.warn("Failed to load sessions in DOMContentLoaded:", e);
+  }
+  try { validateUI && validateUI(); } catch (e) {
+    console.warn("Failed to validate UI on DOMContentLoaded:", e);
+  }
 });
 
 
@@ -2368,7 +2705,9 @@ try {
   if (document.readyState === "complete") {
     validateUI();
   }
-} catch (e) {}
+} catch (e) {
+  console.warn("Failed early UI validation check:", e);
+}
 
 // ======= Auto-Backup and Recently Saved UI Logic =======
 
@@ -2379,46 +2718,46 @@ async function loadBackupsUI() {
       () => chrome.storage.local.get(["autoBackupSettings", "backupHistory"]),
       "loading backups UI"
     );
-    
+
     if (!result.success) return;
-    
+
     const settings = result.data.autoBackupSettings || {
       enabled: false,
       frequency: "daily",
       maxBackups: 10,
       lastBackupTime: 0
     };
-    
+
     const enabledInput = document.getElementById("autoBackupEnabled");
     if (enabledInput) enabledInput.checked = settings.enabled;
-    
+
     const freqRadios = document.getElementsByName("autoBackupFrequency");
     freqRadios.forEach(radio => {
       if (radio.value === settings.frequency) {
         radio.checked = true;
       }
     });
-    
+
     const maxFilesSelect = document.getElementById("autoBackupMaxFiles");
     if (maxFilesSelect) maxFilesSelect.value = settings.maxBackups;
-    
+
     const lastBackupSpan = document.getElementById("lastBackupTimeSpan");
     if (lastBackupSpan) {
-      lastBackupSpan.textContent = settings.lastBackupTime 
-        ? new Date(settings.lastBackupTime).toLocaleString() 
+      lastBackupSpan.textContent = settings.lastBackupTime
+        ? new Date(settings.lastBackupTime).toLocaleString()
         : "Never";
     }
-    
+
     const container = document.getElementById("backupListContainer");
     if (container) {
       container.innerHTML = "";
       const backupHistory = result.data.backupHistory || [];
-      
+
       if (backupHistory.length === 0) {
         container.innerHTML = `<div style="text-align: center; font-size: 11px; color: var(--text-secondary); padding: 8px 0;">No backups available.</div>`;
         return;
       }
-      
+
       backupHistory.forEach(backup => {
         const item = document.createElement("div");
         item.className = "backup-item";
@@ -2430,17 +2769,49 @@ async function loadBackupsUI() {
         item.style.borderRadius = "var(--radius-sm)";
         item.style.background = "var(--bg-secondary)";
         item.style.fontSize = "11px";
-        
-        item.innerHTML = `
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-weight: 600; color: var(--text-primary);">Backup - ${new Date(backup.createdAt).toLocaleDateString()}</span>
-            <button class="restore-backup-btn ag-btn ag-btn-primary" data-id="${backup.backupId}" style="min-height: 22px !important; height: 22px; padding: 2px 8px; font-size: 10px; cursor: pointer;">Restore</button>
-          </div>
-          <div style="font-size: 10px; color: var(--text-secondary); display: flex; justify-content: space-between;">
-            <span>Tabs: ${backup.tabCount} | Sessions: ${backup.sessionCount}</span>
-            <span style="font-size: 9px; opacity: 0.7;">${new Date(backup.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-          </div>
-        `;
+
+        const topRow = document.createElement("div");
+        topRow.style.display = "flex";
+        topRow.style.justifyContent = "space-between";
+        topRow.style.alignItems = "center";
+
+        const titleSpan = document.createElement("span");
+        titleSpan.style.fontWeight = "600";
+        titleSpan.style.color = "var(--text-primary)";
+        titleSpan.textContent = `Backup - ${new Date(backup.createdAt).toLocaleDateString()}`;
+
+        const restoreBtn = document.createElement("button");
+        restoreBtn.className = "restore-backup-btn ag-btn ag-btn-primary";
+        restoreBtn.dataset.id = backup.backupId;
+        restoreBtn.style.minHeight = "22px";
+        restoreBtn.style.height = "22px";
+        restoreBtn.style.padding = "2px 8px";
+        restoreBtn.style.fontSize = "10px";
+        restoreBtn.style.cursor = "pointer";
+        restoreBtn.textContent = "Restore";
+
+        topRow.appendChild(titleSpan);
+        topRow.appendChild(restoreBtn);
+
+        const bottomRow = document.createElement("div");
+        bottomRow.style.fontSize = "10px";
+        bottomRow.style.color = "var(--text-secondary)";
+        bottomRow.style.display = "flex";
+        bottomRow.style.justifyContent = "space-between";
+
+        const statsSpan = document.createElement("span");
+        statsSpan.textContent = `Tabs: ${backup.tabCount} | Sessions: ${backup.sessionCount}`;
+
+        const timeSpan = document.createElement("span");
+        timeSpan.style.fontSize = "9px";
+        timeSpan.style.opacity = "0.7";
+        timeSpan.textContent = new Date(backup.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        bottomRow.appendChild(statsSpan);
+        bottomRow.appendChild(timeSpan);
+
+        item.appendChild(topRow);
+        item.appendChild(bottomRow);
         container.appendChild(item);
       });
     }
@@ -2454,7 +2825,7 @@ function renderRecentlySaved(items) {
   const list = document.getElementById("recentlySavedList");
   if (!list) return;
   list.innerHTML = "";
-  
+
   if (!items || items.length === 0) {
     list.innerHTML = `
       <div class="empty-state" style="padding: 10px 0; text-align: center; color: var(--text-secondary); font-size: 13px;">
@@ -2463,11 +2834,11 @@ function renderRecentlySaved(items) {
     `;
     return;
   }
-  
+
   items.forEach((item) => {
     const domain = getDomain(item.url);
     const timeAgoStr = timeAgo(item.savedAt);
-    
+
     const div = document.createElement("div");
     div.className = "recently-saved-item";
     div.style.display = "flex";
@@ -2479,294 +2850,122 @@ function renderRecentlySaved(items) {
     div.style.borderRadius = "var(--radius-md)";
     div.style.background = "var(--bg-secondary)";
     div.style.width = "100%";
-    
-    div.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-        <img class="favicon" src="${item.favicon || DEFAULT_FAVICON}" onerror="this.onerror=null; this.src='${DEFAULT_FAVICON}'" style="width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0;" />
-        <div style="display: flex; flex-direction: column; min-width: 0; gap: 2px;">
-          <span style="font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
-          <div style="display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-secondary);">
-            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;" title="${escapeHTML(domain)}">${escapeHTML(domain)}</span>
-            <span style="opacity: 0.6;">•</span>
-            <span style="white-space: nowrap;">${timeAgoStr}</span>
-          </div>
-        </div>
-      </div>
-      <div class="recently-saved-actions" style="display: flex; gap: 4px; flex-shrink: 0;">
-        <button class="rs-action-btn rs-open" data-url="${escapeHTML(item.url)}" title="Open Tab" style="background: transparent; border: none; cursor: pointer; color: var(--accent-primary); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
-          <span class="material-icons" style="font-size: 16px;">open_in_new</span>
-        </button>
-        <button class="rs-action-btn rs-copy" data-url="${escapeHTML(item.url)}" title="Copy URL" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
-          <span class="material-icons" style="font-size: 16px;">content_copy</span>
-        </button>
-        <button class="rs-action-btn rs-delete" data-url="${escapeHTML(item.url)}" title="Remove Saved Entry" style="background: transparent; border: none; cursor: pointer; color: var(--danger-color); display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px;">
-          <span class="material-icons" style="font-size: 16px;">delete</span>
-        </button>
-      </div>
-    `;
-    
+
+    // Left Container info
+    const infoDiv = document.createElement("div");
+    infoDiv.style.display = "flex";
+    infoDiv.style.alignItems = "center";
+    infoDiv.style.gap = "10px";
+    infoDiv.style.minWidth = "0";
+    infoDiv.style.flex = "1";
+
+    const img = document.createElement("img");
+    img.className = "favicon";
+    const faviconUrl = item.favicon || DEFAULT_FAVICON;
+    img.src = window.TSP.isValidFaviconUrl(faviconUrl) ? faviconUrl : DEFAULT_FAVICON;
+    img.onerror = () => {
+      img.onerror = null;
+      img.src = DEFAULT_FAVICON;
+    };
+    img.style.width = "16px";
+    img.style.height = "16px";
+    img.style.borderRadius = "2px";
+    img.style.flexShrink = "0";
+
+    const textDiv = document.createElement("div");
+    textDiv.style.display = "flex";
+    textDiv.style.flexDirection = "column";
+    textDiv.style.minWidth = "0";
+    textDiv.style.gap = "2px";
+
+    const titleSpan = document.createElement("span");
+    titleSpan.style.fontSize = "12px";
+    titleSpan.style.fontWeight = "600";
+    titleSpan.style.color = "var(--text-primary)";
+    titleSpan.style.whiteSpace = "nowrap";
+    titleSpan.style.overflow = "hidden";
+    titleSpan.style.textOverflow = "ellipsis";
+    titleSpan.textContent = item.title;
+    titleSpan.title = item.title || "";
+
+    const metaDiv = document.createElement("div");
+    metaDiv.style.display = "flex";
+    metaDiv.style.alignItems = "center";
+    metaDiv.style.gap = "6px";
+    metaDiv.style.fontSize = "10px";
+    metaDiv.style.color = "var(--text-secondary)";
+
+    const domainSpan = document.createElement("span");
+    domainSpan.style.whiteSpace = "nowrap";
+    domainSpan.style.overflow = "hidden";
+    domainSpan.style.textOverflow = "ellipsis";
+    domainSpan.style.maxWidth = "120px";
+    domainSpan.textContent = domain;
+    domainSpan.title = domain;
+
+    const separatorSpan = document.createElement("span");
+    separatorSpan.style.opacity = "0.6";
+    separatorSpan.textContent = "•";
+
+    const timeSpan = document.createElement("span");
+    timeSpan.style.whiteSpace = "nowrap";
+    timeSpan.textContent = timeAgoStr;
+
+    metaDiv.appendChild(domainSpan);
+    metaDiv.appendChild(separatorSpan);
+    metaDiv.appendChild(timeSpan);
+
+    textDiv.appendChild(titleSpan);
+    textDiv.appendChild(metaDiv);
+
+    infoDiv.appendChild(img);
+    infoDiv.appendChild(textDiv);
+
+    // Right Actions container
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "recently-saved-actions";
+    actionsDiv.style.display = "flex";
+    actionsDiv.style.gap = "4px";
+    actionsDiv.style.flexShrink = "0";
+
+    const createRsBtn = (iconName, className, titleText, colorVar) => {
+      const btn = document.createElement("button");
+      btn.className = `rs-action-btn ${className}`;
+      btn.dataset.url = item.url;
+      btn.title = titleText;
+      btn.style.background = "transparent";
+      btn.style.border = "none";
+      btn.style.cursor = "pointer";
+      btn.style.color = `var(${colorVar})`;
+      btn.style.display = "flex";
+      btn.style.alignItems = "center";
+      btn.style.justifyContent = "center";
+      btn.style.padding = "4px";
+      btn.style.borderRadius = "4px";
+
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "material-icons";
+      iconSpan.style.fontSize = "16px";
+      iconSpan.textContent = iconName;
+
+      btn.appendChild(iconSpan);
+      return btn;
+    };
+
+    const openBtn = createRsBtn("open_in_new", "rs-open", "Open Tab", "--accent-primary");
+    const copyBtn = createRsBtn("content_copy", "rs-copy", "Copy URL", "--text-secondary");
+    const deleteBtn = createRsBtn("delete", "rs-delete", "Remove Saved Entry", "--danger-color");
+
+    actionsDiv.appendChild(openBtn);
+    actionsDiv.appendChild(copyBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    div.appendChild(infoDiv);
+    div.appendChild(actionsDiv);
+
     list.appendChild(div);
   });
 }
 
 // Bind button event listeners once DOM is ready
-document.addEventListener("DOMContentLoaded", () => {
-  // Manual Backup Button click
-  const createBackupBtn = document.getElementById("createBackupBtn");
-  if (createBackupBtn) {
-    createBackupBtn.onclick = async () => {
-      createBackupBtn.disabled = true;
-      showMessage("Creating backup...", "info");
-      try {
-        const response = await chrome.runtime.sendMessage({ action: "triggerManualBackup" });
-        if (response && response.success) {
-          showMessage("Backup created successfully!", "success");
-          await loadBackupsUI();
-        } else {
-          showMessage("Failed to create backup: " + (response.error || "Unknown error"), "warning");
-        }
-      } catch (err) {
-        console.error(err);
-        showMessage("Failed to create backup.", "warning");
-      } finally {
-        createBackupBtn.disabled = false;
-      }
-    };
-  }
-
-  // Restore Backup click delegation (triggers Preview modal)
-  const backupListContainer = document.getElementById("backupListContainer");
-  if (backupListContainer) {
-    backupListContainer.addEventListener("click", async (e) => {
-      const btn = e.target.closest(".restore-backup-btn");
-      if (!btn) return;
-      
-      const backupId = parseInt(btn.dataset.id, 10);
-      
-      try {
-        const result = await chrome.storage.local.get(["backupHistory", "savedTabs", "savedSessions"]);
-        const backupHistory = result.backupHistory || [];
-        const backup = backupHistory.find(b => b.backupId === backupId);
-        
-        if (!backup) {
-          showMessage("Backup file not found", "warning");
-          return;
-        }
-        
-        const currentTabs = result.savedTabs || [];
-        const currentSessions = result.savedSessions || [];
-        
-        const backupTabs = backup.backupData.savedTabs || [];
-        const backupSessions = backup.backupData.savedSessions || [];
-        
-        // Calculate backup data size in KB
-        const sizeInBytes = JSON.stringify(backup.backupData).length;
-        const sizeInKB = (sizeInBytes / 1024).toFixed(1) + " KB";
-        
-        // Format Date and Time
-        const createdAtDate = new Date(backup.createdAt);
-        const dateStr = createdAtDate.toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
-        const timeStr = createdAtDate.toLocaleTimeString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        
-        // Populate modal text fields
-        document.getElementById("rpBackupDate").textContent = dateStr;
-        document.getElementById("rpBackupTime").textContent = timeStr;
-        document.getElementById("rpBackupSize").textContent = sizeInKB;
-        
-        document.getElementById("rpCurrentTabs").textContent = currentTabs.length;
-        document.getElementById("rpCurrentSessions").textContent = currentSessions.length;
-        
-        document.getElementById("rpBackupTabs").textContent = backupTabs.length;
-        document.getElementById("rpBackupSessions").textContent = backupSessions.length;
-        
-        // Check for potential data loss
-        const warningContainer = document.getElementById("rpWarningContainer");
-        const warningText = document.getElementById("rpWarningText");
-        const infoContainer = document.getElementById("rpInfoContainer");
-        
-        const tabLoss = currentTabs.length - backupTabs.length;
-        const sessionLoss = currentSessions.length - backupSessions.length;
-        
-        if (tabLoss > 0 || sessionLoss > 0) {
-          let lossMsg = `Restoring this backup will replace your current saved tabs and sessions. `;
-          const details = [];
-          if (tabLoss > 0) details.push(`lose ${tabLoss} saved tab${tabLoss > 1 ? 's' : ''}`);
-          if (sessionLoss > 0) details.push(`lose ${sessionLoss} saved session${sessionLoss > 1 ? 's' : ''}`);
-          lossMsg += `You may ${details.join(" and ")}.`;
-          
-          warningText.textContent = lossMsg;
-          warningContainer.style.display = "block";
-          infoContainer.style.display = "none";
-        } else {
-          warningContainer.style.display = "none";
-          infoContainer.style.display = "block";
-        }
-        
-        // Store reference to active backup for confirm action
-        window.activeRestoreBackup = backup;
-        
-        // Show the Restore Preview modal
-        const restorePreviewModal = document.getElementById("restorePreviewModal");
-        if (restorePreviewModal) {
-          restorePreviewModal.classList.remove("hidden");
-        }
-      } catch (err) {
-        console.error("Error preparing restore preview modal:", err);
-        showMessage("Failed to open restore preview.", "warning");
-      }
-    });
-  }
-
-  // Cancel Restore Preview button click
-  const cancelRestorePreviewBtn = document.getElementById("cancelRestorePreviewBtn");
-  if (cancelRestorePreviewBtn) {
-    cancelRestorePreviewBtn.onclick = () => {
-      const restorePreviewModal = document.getElementById("restorePreviewModal");
-      if (restorePreviewModal) {
-        restorePreviewModal.classList.add("hidden");
-      }
-      window.activeRestoreBackup = null;
-    };
-  }
-
-  // Backdrop click to close Restore Preview modal
-  const restorePreviewModal = document.getElementById("restorePreviewModal");
-  if (restorePreviewModal) {
-    restorePreviewModal.addEventListener("click", (e) => {
-      if (e.target === restorePreviewModal) {
-        restorePreviewModal.classList.add("hidden");
-        window.activeRestoreBackup = null;
-      }
-    });
-  }
-
-  // Confirm Restore Backup button click
-  const confirmRestorePreviewBtn = document.getElementById("confirmRestorePreviewBtn");
-  if (confirmRestorePreviewBtn) {
-    confirmRestorePreviewBtn.onclick = async () => {
-      const backup = window.activeRestoreBackup;
-      if (!backup) {
-        showMessage("No active backup selected.", "warning");
-        return;
-      }
-      
-      confirmRestorePreviewBtn.disabled = true;
-      try {
-        const savedTabs = (backup.backupData.savedTabs || [])
-          .map(sanitizeTabData)
-          .filter(t => t !== null);
-          
-        const savedSessions = (backup.backupData.savedSessions || []).map(session => {
-          const validSessionTabs = (session.tabs || [])
-            .map(sanitizeTabData)
-            .filter(t => t !== null);
-          return {
-            ...session,
-            tabs: validSessionTabs
-          };
-        });
-        
-        await chrome.storage.local.set({ savedTabs, savedSessions });
-        
-        // Hide modal
-        if (restorePreviewModal) {
-          restorePreviewModal.classList.add("hidden");
-        }
-        window.activeRestoreBackup = null;
-        
-        showMessage(`Backup restored successfully!\nTabs: ${savedTabs.length} | Sessions: ${savedSessions.length}`, "success", 4000);
-        
-        // Sync and refresh
-        await updateRecentlySaved(savedTabs);
-        loadTabs();
-        try { await loadSessions(); } catch (e) {}
-      } catch (err) {
-        console.error("Error during backup restoration:", err);
-        showMessage("Failed to restore backup.", "warning");
-      } finally {
-        confirmRestorePreviewBtn.disabled = false;
-      }
-    };
-  }
-
-  // Recently Saved Actions delegation
-  const recentlySavedList = document.getElementById("recentlySavedList");
-  if (recentlySavedList) {
-    recentlySavedList.addEventListener("click", async (e) => {
-      const btn = e.target.closest(".rs-action-btn");
-      if (!btn) return;
-      
-      const url = btn.dataset.url;
-      if (btn.classList.contains("rs-open")) {
-        if (isValidUrl(url)) {
-          if (url.startsWith("file://")) {
-            checkFileSchemeAccess((isAllowed) => {
-              if (!isAllowed) {
-                showMessage("Enable 'Allow access to file URLs' in extension settings to open local files.", "warning", 5000);
-                return;
-              }
-              chrome.tabs.create({ url });
-              showMessage("Tab opened!", "success");
-            });
-            return;
-          }
-          chrome.tabs.create({ url });
-          showMessage("Tab opened!", "success");
-        } else {
-          showMessage("Invalid URL cannot be opened", "warning");
-        }
-      } else if (btn.classList.contains("rs-copy")) {
-        try {
-          await navigator.clipboard.writeText(url);
-          showMessage("URL copied to clipboard!", "success");
-        } catch (err) {
-          showMessage("Failed to copy URL", "warning");
-        }
-      } else if (btn.classList.contains("rs-delete")) {
-        const confirmed = confirm("Remove this saved entry?");
-        if (!confirmed) return;
-        
-        try {
-          // Remove from savedTabs
-          const tabsResult = await safeStorageOperation(
-            () => chrome.storage.local.get(["savedTabs"]),
-            "loading tabs for rs delete"
-          );
-          if (tabsResult.success) {
-            const filtered = (tabsResult.data.savedTabs || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
-            await safeStorageOperation(
-              () => chrome.storage.local.set({ savedTabs: filtered }),
-              "saving tabs after rs delete"
-            );
-          }
-          
-          // Remove from recentlySaved
-          const rsResult = await safeStorageOperation(
-            () => chrome.storage.local.get(["recentlySaved"]),
-            "loading recently saved for rs delete"
-          );
-          if (rsResult.success) {
-            const filteredRs = (rsResult.data.recentlySaved || []).filter(t => normalizeUrl(t.url) !== normalizeUrl(url));
-            await safeStorageOperation(
-              () => chrome.storage.local.set({ recentlySaved: filteredRs }),
-              "saving recently saved after rs delete"
-            );
-            renderRecentlySaved(filteredRs);
-          }
-          
-          loadTabs();
-          showMessage("Entry removed!", "success");
-        } catch (err) {
-          console.error("Error deleting recently saved entry:", err);
-        }
-      }
-    });
-  }
-});
+// Bindings consolidated into main DOMContentLoaded handler.

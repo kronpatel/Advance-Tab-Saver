@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-06-26
+
+### Added
+- Native Firefox MV3 Support (includes distinct `manifest.firefox.json` background script bindings and Gecko compatibility specifications).
+- Reduced Motion Accessibility Support (disables all spring scale transitions and animations when OS pref is active).
+- Sleek Custom Confirmation Modal Overlays (features slate styling, WebKit-prefixed 8px backdrop blur, keyboard navigation trap, and z-index 1000 dialog layering).
+- Standard repository metadata files (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `PRIVACY.md`).
+- Architectural configuration documentation inside [config.js](config.js).
+
+### Improved
+- Repository `.gitignore` rules (comprehensively excludes temporary log, IDE, and OS metadata files).
+- GitHub Pages landing page [index.html](index.html) (adds SEO/OpenGraph tags, theme responsiveness, mobile spacing improvements, and favicon support).
+
 ## [3.1.0] - 2026-06-17
 
 ### Added
